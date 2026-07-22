@@ -1,0 +1,10 @@
+-- 在 Supabase Dashboard → SQL Editor 中执行这段迁移
+-- 安全的 ALTER IF NOT EXISTS，可重复执行
+
+ALTER TABLE deconstructions ADD COLUMN IF NOT EXISTS reusable_genes JSONB DEFAULT '[]';
+ALTER TABLE deconstructions ADD COLUMN IF NOT EXISTS golden_sentences JSONB DEFAULT '[]';
+ALTER TABLE deconstructions ADD COLUMN IF NOT EXISTS score INTEGER DEFAULT 80;
+
+ALTER TABLE hotwords ADD COLUMN IF NOT EXISTS category TEXT DEFAULT '通用';
+ALTER TABLE hotwords ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'auto';
+ALTER TABLE hotwords ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
