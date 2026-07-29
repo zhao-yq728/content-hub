@@ -411,7 +411,6 @@ function KpiCard({ label, value, color, icon, onClick }) {
       style={{
         padding: 18, borderRadius: 14, backgroundColor: '#fff', border: '1px solid #eef0f3',
         cursor: onClick ? 'pointer' : 'default', transition: 'box-shadow 0.2s, transform 0.2s',
-        ...(onClick ? { ':hover': {} } : {}),
       }}
       onMouseEnter={e => { if (onClick) e.currentTarget.style.boxShadow = '0 6px 18px rgba(0,0,0,0.08)'; }}
       onMouseLeave={e => { if (onClick) e.currentTarget.style.boxShadow = 'none'; }}
