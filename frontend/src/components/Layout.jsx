@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 const navItems = [
-  { key: 'home', label: '首页', icon: '🏠' },
+  { key: 'home', label: '工作台', icon: '🏠' },
   { key: 'library', label: '素材库', icon: '📚' },
   { key: 'deconstruct', label: '拆解中心', icon: '🔬' },
   { key: 'rewrite', label: '仿写工坊', icon: '✍️' },
