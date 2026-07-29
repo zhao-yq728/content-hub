@@ -25,7 +25,7 @@ function uid() {
 }
 
 // ---------- AI API 调用 ----------
-async function callAI(prompt, systemPrompt) {
+export async function callAI(prompt, systemPrompt) {
   const cfg = await configAPI.get();
   if (!cfg.apiKey || !cfg.apiKey.trim()) {
     throw new Error('API Key 未配置。请在「设置」页面填写 API Key 并保存。');

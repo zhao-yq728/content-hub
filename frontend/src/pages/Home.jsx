@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { contentAPI, deconstructAPI, rewriteAPI, hotwordAPI, categoryAPI, configAPI } from '../api';
+import { contentAPI, deconstructAPI, rewriteAPI, hotwordAPI, categoryAPI, configAPI, callAI } from '../api';
 
 const PLATFORM_LABEL = {
   xiaohongshu: '小红书',
@@ -100,6 +100,65 @@ export default function Home({ onNavigate }) {
       setToast({ type: 'error', msg: (e.message || e).toString().split('\n')[0] });
     } finally {
       setScraping(false);
+    }
+  }
+
+  // ---------- 今日创作建议（AI） ----------
+  const [suggestions, setSuggestions] = useState([]);
+  const [genLoading, setGenLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
+
+  async function generateSuggestions() {
+    setGenLoading(true);
+    setAiError(null);
+    try {
+      const materials = recentContents.slice(0, 8).map(c => ({
+        title: (c.title || '无标题').slice(0, 30),
+        category: c.category || '未分类',
+      }));
+      const words = hotwords.slice(0, 24).map(h => h.word);
+      const sys = '你是资深的小红书 / 抖音疗愈玄学赛道内容策划，精通占星、塔罗、能量、身心灵、情绪价值类爆款选题设计。语气亲切、懂平台算法、擅长把抽象概念变成让人想点开的标题。';
+      const user = [
+        '我的素材库最近内容（标题 / 分类）：',
+        materials.length ? materials.map(m => `- ${m.title}（${m.category}）`).join('\n') : '（暂无素材）',
+        '',
+        '我热词库里有：',
+        words.length ? words.join('、') : '（暂无热词）',
+        '',
+        '请基于以上，为我生成 4 个【今天就能动笔】的疗愈/玄学爆款选题。要求：',
+        '1. 贴合占星/塔罗/能量/身心灵赛道，可结合上面的热词；',
+        '2. 角度新颖、不重复、有点击欲望；',
+        '3. 每个选题给：标题、切入角度、开头钩子（金句）。',
+        '',
+        '只返回 JSON 数组，格式严格如下，不要任何额外文字：',
+        '[{"title":"选题标题","angle":"切入角度","hook":"开头钩子金句"}]',
+      ].join('\n');
+
+      const text = await callAI(user, sys);
+      let parsed = null;
+      try {
+        const m = text.match(/\[[\s\S]*\]/);
+        parsed = JSON.parse(m ? m[0] : text);
+      } catch (e) { parsed = null; }
+      if (Array.isArray(parsed) && parsed.length) {
+        setSuggestions(parsed);
+      } else {
+        setSuggestions([{ title: 'AI 灵感', angle: (text || '').slice(0, 240), hook: '' }]);
+      }
+    } catch (e) {
+      setAiError((e && e.message ? e.message : String(e)).toString().split('\n')[0]);
+    } finally {
+      setGenLoading(false);
+    }
+  }
+
+  function copySuggestion(s) {
+    const t = `【选题】${s.title || ''}\n角度：${s.angle || ''}\n钩子：${s.hook || ''}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(t).then(
+        () => setToast({ type: 'success', msg: '已复制选题，可去仿写工坊粘贴' }),
+        () => setToast({ type: 'error', msg: '复制失败，请手动选择' })
+      );
     }
   }
 
@@ -207,6 +266,44 @@ export default function Home({ onNavigate }) {
               onNavigate={onNavigate}
             />
           </div>
+
+          {/* 今日创作建议（AI） */}
+          <SectionCard
+            title="✨ 今日创作建议"
+            subtitle="AI 结合你的素材库 + 热词，生成今天就能动笔的疗愈/玄学选题"
+            action={stats.apiOk ? { label: genLoading ? '生成中…' : '🔄 重新生成', onClick: generateSuggestions } : null}
+            style={{ marginTop: 18, background: 'linear-gradient(120deg,#faf5ff 0%,#fdf2f8 100%)', border: '1px solid #f3e8ff' }}
+          >
+            {!stats.apiOk ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', color: '#9a3412', fontSize: 13 }}>
+                <span>⚠️ 还没配置 AI Key，去设置页填好就能用。</span>
+                <button onClick={() => onNavigate('settings')} style={{ padding: '8px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, backgroundColor: '#7c3aed', color: '#fff' }}>去配置</button>
+              </div>
+            ) : genLoading ? (
+              <div style={{ textAlign: 'center', padding: 30, color: '#a855f7', fontSize: 14 }}>✨ AI 正在为你构思今天的选题…</div>
+            ) : aiError ? (
+              <div style={{ color: '#b91c1c', fontSize: 13 }}>
+                <div>⚠️ {aiError}</div>
+                <div style={{ color: '#9a3412', marginTop: 6 }}>提示：AI 需要本机代理支持。请先在本机运行 <code style={{ background: '#fff', padding: '1px 6px', borderRadius: 4 }}>python ../start-cdp-proxy.py</code> 再试。</div>
+                <button onClick={generateSuggestions} style={{ marginTop: 10, padding: '8px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, backgroundColor: '#7c3aed', color: '#fff' }}>重试</button>
+              </div>
+            ) : suggestions.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 24, color: '#a855f7', fontSize: 13 }}>
+                还没生成。点右上角「✨ 生成建议」，让 AI 帮你定下今天的选题方向。
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
+                {suggestions.map((s, i) => (
+                  <div key={i} style={{ padding: 14, borderRadius: 12, background: '#fff', border: '1px solid #f0e6ff', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#7c3aed', lineHeight: 1.4 }}>{i + 1}. {s.title}</div>
+                    {s.angle && <div style={{ fontSize: 12, color: '#495057', lineHeight: 1.5 }}><b style={{ color: '#7c3aed' }}>角度</b>：{s.angle}</div>}
+                    {s.hook && <div style={{ fontSize: 12, color: '#868e96', fontStyle: 'italic', lineHeight: 1.5 }}>“{s.hook}”</div>}
+                    <button onClick={() => copySuggestion(s)} style={{ marginTop: 'auto', alignSelf: 'flex-start', padding: '6px 12px', borderRadius: 8, border: '1px solid #e9d5ff', cursor: 'pointer', fontSize: 12, fontWeight: 600, backgroundColor: '#faf5ff', color: '#7c3aed' }}>📋 复制选题</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
 
           {/* Pipeline progress */}
           <SectionCard title="创作流水线" subtitle="看一眼就知道内容卡在哪一步">
