@@ -288,7 +288,7 @@ export default function Home({ onNavigate }) {
           {/* 今日创作建议（AI） */}
           <SectionCard
             title="✨ 今日创作建议"
-            subtitle="AI 结合你的素材库 + 热词，生成今天就能动笔的疗愈/玄学选题"
+            subtitle="AI 结合你的素材库 + 热词，生成今天就能动笔的选题"
             action={stats.apiOk ? { label: genLoading ? '生成中…' : '🔄 重新生成', onClick: generateSuggestions } : null}
             style={{ marginTop: 18, background: 'linear-gradient(120deg,#faf5ff 0%,#fdf2f8 100%)', border: '1px solid #f3e8ff' }}
           >
