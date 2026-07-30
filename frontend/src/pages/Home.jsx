@@ -68,7 +68,7 @@ export default function Home({ onNavigate }) {
       });
       setRecentContents(contents.slice(0, 6));
       setRecentRewrites(rewrites.slice(0, 5));
-      setCategories(cats.slice(0, 8));
+      setCategories(cats); // 显示全部分类供选择
       setHotwords(hots.slice(0, 16));
     } catch (e) {
       setToast({ type: 'error', msg: '数据加载失败：' + (e.message || e) });
@@ -107,20 +107,38 @@ export default function Home({ onNavigate }) {
   const [suggestions, setSuggestions] = useState([]);
   const [genLoading, setGenLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
+  const [selectedCategories, setSelectedCategories] = useState([]); // 手动选中的分类
+
+  /** 切换分类选中状态 */
+  function toggleCategory(catName) {
+    setSelectedCategories(prev =>
+      prev.includes(catName)
+        ? prev.filter(n => n !== catName)
+        : [...prev, catName]
+    );
+  }
 
   async function generateSuggestions() {
     setGenLoading(true);
     setAiError(null);
     try {
-      const materials = recentContents.slice(0, 8).map(c => ({
+      // 按选中的分类筛选素材（未选则用全库最近 8 条）
+      const allMaterials = recentContents.map(c => ({
         title: (c.title || '无标题').slice(0, 30),
         category: c.category || '未分类',
       }));
+      const materials = selectedCategories.length > 0
+        ? allMaterials.filter(m => selectedCategories.includes(m.category)).slice(0, 8)
+        : allMaterials.slice(0, 8);
       const words = hotwords.slice(0, 24).map(h => h.word);
       const sys = '你是资深的小红书 / 抖音疗愈玄学赛道内容策划，精通占星、塔罗、能量、身心灵、情绪价值类爆款选题设计。语气亲切、懂平台算法、擅长把抽象概念变成让人想点开的标题。';
       const user = [
-        '我的素材库最近内容（标题 / 分类）：',
-        materials.length ? materials.map(m => `- ${m.title}（${m.category}）`).join('\n') : '（暂无素材）',
+        selectedCategories.length > 0
+          ? `我今天想专注写【${selectedCategories.join('、')}】这几个方向的内容。`
+          : '我没有指定方向，请综合判断。',
+        '',
+        '我的素材库相关内容（标题 / 分类）：',
+        materials.length ? materials.map(m => `- ${m.title}（${m.category}）`).join('\n') : '（暂无匹配素材）',
         '',
         '我热词库里有：',
         words.length ? words.join('、') : '（暂无热词）',
@@ -274,6 +292,47 @@ export default function Home({ onNavigate }) {
             action={stats.apiOk ? { label: genLoading ? '生成中…' : '🔄 重新生成', onClick: generateSuggestions } : null}
             style={{ marginTop: 18, background: 'linear-gradient(120deg,#faf5ff 0%,#fdf2f8 100%)', border: '1px solid #f3e8ff' }}
           >
+            {/* 分类选择器 */}
+            <div style={{ marginBottom: selectedCategories.length > 0 ? 14 : 10 }}>
+              <div style={{ fontSize: 12, color: '#9333ea', fontWeight: 600, marginBottom: 8 }}>
+                📂 选择分类聚焦方向（可多选，不选则用全库）
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                {categories.map(cat => {
+                  const active = selectedCategories.includes(cat.name);
+                  return (
+                    <button
+                      key={cat.name}
+                      onClick={() => toggleCategory(cat.name)}
+                      style={{
+                        padding: '5px 12px', borderRadius: 16, border: 'none',
+                        cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                        backgroundColor: active ? (CATEGORY_COLORS[cat.name] || '#7c3aed') : '#fff',
+                        color: active ? '#fff' : '#6b7280',
+                        border: active ? 'none' : '1px solid #e5d9f5',
+                        transition: 'all 0.15s',
+                        boxShadow: active ? `0 2px 8px ${(CATEGORY_COLORS[cat.name] || '#7c3aed')}40` : 'none',
+                      }}
+                    >
+                      {active && '✓ '}{cat.name} ({cat.count})
+                    </button>
+                  );
+                })}
+                {selectedCategories.length > 0 && (
+                  <button
+                    onClick={() => setSelectedCategories([])}
+                    style={{
+                      padding: '5px 12px', borderRadius: 16, border: '1px solid #fca5a5',
+                      cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                      backgroundColor: '#fff', color: '#dc2626',
+                    }}
+                  >
+                    ✕ 清空
+                  </button>
+                )}
+              </div>
+            </div>
+
             {!stats.apiOk ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', color: '#9a3412', fontSize: 13 }}>
                 <span>⚠️ 还没配置 AI Key，去设置页填好就能用。</span>
@@ -282,9 +341,9 @@ export default function Home({ onNavigate }) {
             ) : genLoading ? (
               <div style={{ textAlign: 'center', padding: 30, color: '#a855f7', fontSize: 14 }}>✨ AI 正在为你构思今天的选题…</div>
             ) : aiError ? (
-              <div style={{ color: '#b91c1c', fontSize: 13 }}>
+                <div style={{ color: '#b91c1c', fontSize: 13 }}>
                 <div>⚠️ {aiError}</div>
-                <div style={{ color: '#9a3412', marginTop: 6 }}>提示：AI 需要本机代理支持。请先在本机运行 <code style={{ background: '#fff', padding: '1px 6px', borderRadius: 4 }}>python ../start-cdp-proxy.py</code> 再试。</div>
+                <div style={{ color: '#9a3412', marginTop: 6 }}>提示：网页已支持直接调用 AI（手机/电脑均可）。若失败请检查「设置」里 API Key 是否正确，或网络是否可访问智谱服务。</div>
                 <button onClick={generateSuggestions} style={{ marginTop: 10, padding: '8px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, backgroundColor: '#7c3aed', color: '#fff' }}>重试</button>
               </div>
             ) : suggestions.length === 0 ? (
