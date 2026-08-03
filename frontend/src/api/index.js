@@ -31,7 +31,45 @@ export async function callAI(prompt, systemPrompt) {
     throw new Error('API Key 未配置。请在「设置」页面填写 API Key 并保存。');
   }
 
-  // 优先走本机 HTTPS 代理（绕过浏览器 CORS + Mixed Content）
+  // 首选：浏览器直连 AI 服务（GitHub Pages / 任何设备任何网络均可，智谱已支持跨域 CORS）
+  const url = cfg.apiUrl || 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+  const model = cfg.model || 'glm-4-flash';
+  let resp = null;
+  try {
+    resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + cfg.apiKey,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt || '你是一个有帮助的AI助手。' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.8,
+        max_tokens: 2000,
+      }),
+    });
+  } catch (e) {
+    // 网络层失败（断网 / CORS 被拦）→ 回退本机代理
+    resp = null;
+  }
+
+  if (resp) {
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => '');
+      let msg = errText;
+      try { const j = JSON.parse(errText); msg = j.error?.message || j.error?.code || msg; } catch (e) {}
+      throw new Error('AI 调用失败：' + String(msg).slice(0, 200) + '（状态码 ' + resp.status + '）');
+    }
+    const data = await resp.json();
+    if (data.choices?.[0]?.message?.content) return data.choices[0].message.content;
+    throw new Error('AI 返回格式异常：' + JSON.stringify(data).slice(0, 300));
+  }
+
+  // 兜底：本机代理（本地开发 / 代理可用时；抓取功能也走这里）
   const proxyUrls = ['https://localhost:3443/ai', 'http://localhost:3457/ai'];
   for (const proxyUrl of proxyUrls) {
     try {
@@ -51,45 +89,11 @@ export async function callAI(prompt, systemPrompt) {
         if (proxyData.ok) return proxyData.content;
       }
     } catch (e) {
-      // 此代理不通，试下一个
+      // 代理不通，试下一个
     }
   }
 
-  // 回退：浏览器直接调用
-  const url = cfg.apiType === 'openai'
-    ? 'https://api.openai.com/v1/chat/completions'
-    : cfg.apiUrl || 'https://api.deepseek.com/chat/completions';
-  const model = cfg.model || 'deepseek-chat';
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + cfg.apiKey,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: prompt },
-      ],
-      temperature: 0.8,
-      max_tokens: 2000,
-    }),
-  });
-  if (!resp.ok) {
-    const errText = await resp.text().catch(() => 'Unknown error');
-    let errMessage = errText;
-    try {
-      const errJson = JSON.parse(errText);
-      errMessage = errJson.error?.message || errJson.error?.code || errMessage;
-    } catch (e) { /* use raw text */ }
-    throw new Error('API 调用失败: ' + errMessage.slice(0, 200) + ' (状态码 ' + resp.status + ')');
-  }
-  const data = await resp.json();
-  if (!data.choices?.[0]?.message?.content) {
-    throw new Error('API 返回格式异常：' + JSON.stringify(data).slice(0, 300));
-  }
-  return data.choices[0].message.content;
+  throw new Error('AI 调用失败：直连与本地代理均不可用。请确认「设置」里 API Key 正确，或本机已启动抓取代理。');
 }
 
 // ============ Content API ============
@@ -545,9 +549,7 @@ export const rewriteAPI = {
   },
 
   async run(data) {
-    const { content_id, style = 'default', hotwords = '', count = 3 } = data;
-    const c = await contentAPI.get(content_id);
-    const decon = await deconstructAPI.get(content_id);
+    const { content_id, brief, style = 'default', hotwords = '', count = 3 } = data;
     const n = Math.min(Math.max(parseInt(count) || 3, 1), 5);
 
     const styleMap = {
@@ -566,11 +568,6 @@ export const rewriteAPI = {
     const hotwordText = Array.isArray(hotwords) ? hotwords.join('、') : (hotwords || '');
     const hotwordInject = hotwordText ? '\n需要自然融入的热词（不要生硬堆砌）：' + hotwordText : '';
 
-    // 构建可复用的爆款基因文本
-    const geneText = (decon?.reusable_genes || []).map(g =>
-      '- 【' + g.element + '】' + g.description + ' 用法：' + g.use_case
-    ).join('\n');
-
     // 构建 JSON 模板字符串（避免嵌套模板字面量）
     let exampleItems = '';
     for (let i = 1; i <= n; i++) {
@@ -578,29 +575,8 @@ export const rewriteAPI = {
       exampleItems += '{"title":"标题' + i + '","body":"正文' + i + '","angle":"角度' + String.fromCharCode(64 + i) + '"}';
     }
 
-    const prompt =
-      '你是一个真人博主，正在写一条要发在小红书/抖音的内容。请基于下面这份【爆款拆解】，生成 ' + n + ' 条**同领域、不同角度**的二次创作。\n' +
-      '【风格要求】' + (styleMap[style] || styleMap.default) + hotwordInject + '\n\n' +
-      '【原始标题】' + (c?.title || '') + '\n' +
-      '【原始正文（不要照抄，但要保留核心场景和人物设定）】\n' + ((c?.body || '').slice(0, 1500)) + '\n\n' +
-      '【爆款拆解 - 内在基因】\n' +
-      '标题公式：' + (decon?.title_formula || '') + '\n' +
-      '开篇钩子：' + (decon?.hook_type || '') + '\n' +
-      '情绪曲线：' + (decon?.emotion_curve || '') + '\n' +
-      '互动引导：' + (decon?.engagement_hooks || '') + '\n' +
-      '结尾布局：' + (decon?.visual_style || '') + '\n' +
-      '正文结构：' + (decon?.content_structure || '') + '\n' +
-      (geneText ? '可复用爆款基因：\n' + geneText + '\n' : '') +
-      '【金句摘录（仅作风格参考，词句不照搬）】\n' + ((decon?.golden_sentences || []).slice(0, 3).join('\n')) + '\n\n' +
-      '【核心要求 - 严格遵守】\n' +
-      '1. 【同领域】主题必须和原文一致，原文讲什么就讲什么 — 讲美妆就讲美妆，讲穿搭就讲穿搭，讲美食就讲美食。**严禁换领域**\n' +
-      '2. 【同受众】目标人群保持一致（小白/新手/学生/上班族等定位不变）\n' +
-      '3. 【同结构】复用原文的【标题公式+开篇钩子+情绪节奏+互动引导】，不要换结构\n' +
-      '4. 【不同角度】可以换的是：具体场景、人设、切入点、产品类型、情绪细节、出场顺序\n' +
-      '5. 原文讲"10分钟早八淡妆" → 你可以写"10分钟约会妆/通勤妆/面试妆/健身房妆容"，**都是美妆不同场景**\n' +
-      '6. 原文讲"5套法式穿搭" → 你可以写"5套学院风/通勤风/约会风穿搭"，**都是穿搭不同风格**\n' +
-      '7. 原文讲"省钱存钱" → 你可以写"存钱工具/存钱挑战/副业存钱"，**都是理财不同方法**\n' +
-      '8. 原文讲的具体细节（品牌、地址、价格、地点、人物）可以替换，但【行业/品类/痛点】必须保留\n\n' +
+    // 公共写作规则（两种模式共用）
+    const writingRules =
       '【去 AI 味写作要求】\n' +
       '1. 标题要像真人刷到会点进去的样子，可以用emoji、数字、问句、感叹，但不要全是套路\n' +
       '2. 正文开头不要"大家好""今天来分享"，直接进场景或进情绪\n' +
@@ -620,6 +596,58 @@ export const rewriteAPI = {
       '用JSON格式返回（不要其他文字，不要 ```json 包装）：\n' +
       '{"items":[' + exampleItems + ']}';
 
+    let prompt;
+    let saveContentId = content_id;
+
+    if (content_id) {
+      // ---------- 模板仿写模式 ----------
+      const c = await contentAPI.get(content_id);
+      const decon = await deconstructAPI.get(content_id);
+      const geneText = (decon?.reusable_genes || []).map(g =>
+        '- 【' + g.element + '】' + g.description + ' 用法：' + g.use_case
+      ).join('\n');
+
+      prompt =
+        '你是一个真人博主，正在写一条要发在小红书/抖音的内容。请基于下面这份【爆款拆解】，生成 ' + n + ' 条**同领域、不同角度**的二次创作。\n' +
+        '【风格要求】' + (styleMap[style] || styleMap.default) + hotwordInject + '\n\n' +
+        '【原始标题】' + (c?.title || '') + '\n' +
+        '【原始正文（不要照抄，但要保留核心场景和人物设定）】\n' + ((c?.body || '').slice(0, 1500)) + '\n\n' +
+        '【爆款拆解 - 内在基因】\n' +
+        '标题公式：' + (decon?.title_formula || '') + '\n' +
+        '开篇钩子：' + (decon?.hook_type || '') + '\n' +
+        '情绪曲线：' + (decon?.emotion_curve || '') + '\n' +
+        '互动引导：' + (decon?.engagement_hooks || '') + '\n' +
+        '结尾布局：' + (decon?.visual_style || '') + '\n' +
+        '正文结构：' + (decon?.content_structure || '') + '\n' +
+        (geneText ? '可复用爆款基因：\n' + geneText + '\n' : '') +
+        '【金句摘录（仅作风格参考，词句不照搬）】\n' + ((decon?.golden_sentences || []).slice(0, 3).join('\n')) + '\n\n' +
+        '【核心要求 - 严格遵守】\n' +
+        '1. 【同领域】主题必须和原文一致，原文讲什么就讲什么 — 讲美妆就讲美妆，讲穿搭就讲穿搭，讲美食就讲美食。**严禁换领域**\n' +
+        '2. 【同受众】目标人群保持一致（小白/新手/学生/上班族等定位不变）\n' +
+        '3. 【同结构】复用原文的【标题公式+开篇钩子+情绪节奏+互动引导】，不要换结构\n' +
+        '4. 【不同角度】可以换的是：具体场景、人设、切入点、产品类型、情绪细节、出场顺序\n' +
+        '5. 原文讲"10分钟早八淡妆" → 你可以写"10分钟约会妆/通勤妆/面试妆/健身房妆容"，**都是美妆不同场景**\n' +
+        '6. 原文讲"5套法式穿搭" → 你可以写"5套学院风/通勤风/约会风穿搭"，**都是穿搭不同风格**\n' +
+        '7. 原文讲"省钱存钱" → 你可以写"存钱工具/存钱挑战/副业存钱"，**都是理财不同方法**\n' +
+        '8. 原文讲的具体细节（品牌、地址、价格、地点、人物）可以替换，但【行业/品类/痛点】必须保留\n\n' +
+        writingRules;
+    } else if (brief && brief.trim()) {
+      // ---------- 自由选题模式（灵感首页「去仿写」入口） ----------
+      saveContentId = null;
+      prompt =
+        '你是一个真人博主（疗愈/玄学/占星内容方向），正在写一条要发在小红书/抖音的内容。下面是我已经定好的【选题方向】，请围绕它生成 ' + n + ' 条**不同角度**的成品内容。\n' +
+        '【风格要求】' + (styleMap[style] || styleMap.default) + hotwordInject + '\n\n' +
+        '【选题方向（已定，主题保持一致，可从不同切入角度展开）】\n' + brief.trim() + '\n\n' +
+        '【核心要求】\n' +
+        '1. 主题必须围绕上面的选题方向，不要跑题\n' +
+        '2. 每条内容角度要有差异（不同人群/不同场景/不同情绪点/不同争议点）\n' +
+        '3. 内容要有疗愈/玄学/占星的专业感但不端着，像懂行的朋友在分享\n' +
+        '4. 可结合当下天象（水逆、满月、新月、行星换座等）增加时效性和共鸣\n\n' +
+        writingRules;
+    } else {
+      throw new Error('请先选择模板，或在灵感首页用「去仿写」带入选题方向');
+    }
+
     try {
       const result = await callAI(prompt, '你是爆款内容专家，擅长结构仿写。只返回纯JSON，不要任何额外文字。');
       let cleaned = result.replace(/```json\s*/g, '').replace(/```/g, '').trim();
@@ -629,7 +657,8 @@ export const rewriteAPI = {
       }
       const items = parsed.items.map((item) => ({
         id: uid(),
-        content_id,
+        content_id: saveContentId,
+        brief: saveContentId ? undefined : brief.trim().slice(0, 200),
         title: item.title || '未命名',
         body: item.body || '',
         style,
@@ -912,6 +941,113 @@ export const configAPI = {
     } catch (e) {
       return { ok: false, error: '网络请求失败: ' + e.message };
     }
+  },
+};
+
+// ---------- 用户问题库（热门问题排名来源） ----------
+// 优先用 Supabase 的 questions 表（跨设备）；表缺失时自动回退 localStorage。
+let questionStoreMode = 'unknown'; // 'supabase' | 'local'
+const LS_QUESTIONS_KEY = 'ch_questions_v1';
+
+function lsGetQuestions() {
+  try { return JSON.parse(localStorage.getItem(LS_QUESTIONS_KEY) || '[]'); }
+  catch (e) { return []; }
+}
+function lsSaveQuestions(arr) {
+  localStorage.setItem(LS_QUESTIONS_KEY, JSON.stringify(arr));
+}
+
+export const questionAPI = {
+  mode() { return questionStoreMode; },
+
+  async list() {
+    try {
+      const { data, error } = await supabase
+        .from('questions')
+        .select('*')
+        .order('ask_count', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      questionStoreMode = 'supabase';
+      return data || [];
+    } catch (e) {
+      // 表不存在 → 回退本地
+      questionStoreMode = 'local';
+      return lsGetQuestions()
+        .sort((a, b) => (b.ask_count - a.ask_count) || (new Date(b.created_at) - new Date(a.created_at)));
+    }
+  },
+
+  async create(text, source = '私域') {
+    const t = (text || '').trim();
+    if (!t) return;
+    try {
+      const { data, error } = await supabase
+        .from('questions')
+        .insert({ text: t, source, ask_count: 1 })
+        .select()
+        .single();
+      if (error) throw error;
+      questionStoreMode = 'supabase';
+      return data;
+    } catch (e) {
+      questionStoreMode = 'local';
+      const arr = lsGetQuestions();
+      const item = { id: uid(), text: t, source, ask_count: 1, created_at: new Date().toISOString() };
+      arr.push(item);
+      lsSaveQuestions(arr);
+      return item;
+    }
+  },
+
+  async increment(id) {
+    try {
+      if (questionStoreMode === 'local') throw new Error('local');
+      const { data: cur, error: rerr } = await supabase
+        .from('questions').select('ask_count').eq('id', id).single();
+      if (rerr) throw rerr;
+      const next = (cur?.ask_count || 0) + 1;
+      const { error } = await supabase.from('questions').update({ ask_count: next }).eq('id', id);
+      if (error) throw error;
+    } catch (e) {
+      questionStoreMode = 'local';
+      const arr = lsGetQuestions();
+      const it = arr.find(q => q.id === id);
+      if (it) { it.ask_count = (it.ask_count || 1) + 1; lsSaveQuestions(arr); }
+    }
+  },
+
+  async remove(id) {
+    try {
+      if (questionStoreMode === 'local') throw new Error('local');
+      const { error } = await supabase.from('questions').delete().eq('id', id);
+      if (error) throw error;
+    } catch (e) {
+      questionStoreMode = 'local';
+      const arr = lsGetQuestions().filter(q => q.id !== id);
+      lsSaveQuestions(arr);
+    }
+  },
+};
+
+// ---------- 灵感首页每日缓存（按日期，localStorage，避免每天重复烧 AI） ----------
+const LS_INSPIRE_KEY = 'ch_inspire_cache_v1';
+
+function lsGetInspire() {
+  try { return JSON.parse(localStorage.getItem(LS_INSPIRE_KEY) || '{}'); }
+  catch (e) { return {}; }
+}
+
+export const inspireAPI = {
+  getDaily(dateStr) {
+    const all = lsGetInspire();
+    return all[dateStr] || null;
+  },
+  setDaily(dateStr, payload) {
+    const all = lsGetInspire();
+    all[dateStr] = { ...payload, savedAt: new Date().toISOString() };
+    localStorage.setItem(LS_INSPIRE_KEY, JSON.stringify(all));
   },
 };
 

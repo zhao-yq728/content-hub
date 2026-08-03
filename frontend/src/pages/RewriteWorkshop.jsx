@@ -19,10 +19,11 @@ const NOTE_TYPES = {
     example: '这5个智商税千万别买！用过的人都说后悔' },
 };
 
-export default function RewriteWorkshop({ initialContentId }) {
+export default function RewriteWorkshop({ initialContentId, initialBrief }) {
   const [contents, setContents] = useState([]);
   const [hotwords, setHotwords] = useState([]);
   const [selectedContent, setSelectedContent] = useState(initialContentId || null);
+  const [freeBrief, setFreeBrief] = useState(initialBrief || '');
   const [selectedHotwords, setSelectedHotwords] = useState([]);
   const [style, setStyle] = useState('review');
   const [count, setCount] = useState(3);
@@ -30,7 +31,7 @@ export default function RewriteWorkshop({ initialContentId }) {
   const [results, setResults] = useState([]);
   const [savedList, setSavedList] = useState([]);
   const [tab, setTab] = useState('generate');
-  const [showHelp, setShowHelp] = useState(!initialContentId);
+  const [showHelp, setShowHelp] = useState(!initialContentId && !initialBrief);
   const [sourceDecon, setSourceDecon] = useState(null);
 
   useEffect(() => {
@@ -51,6 +52,15 @@ export default function RewriteWorkshop({ initialContentId }) {
     }
   }, [initialContentId]);
 
+  useEffect(() => {
+    if (initialBrief) {
+      setFreeBrief(initialBrief);
+      setSelectedContent(null);
+      setShowHelp(false);
+      setTab('generate');
+    }
+  }, [initialBrief]);
+
   const deconstructedContents = contents.filter(c => c.has_deconstruction);
   const selectedMeta = contents.find(c => c.id === selectedContent);
 
@@ -61,11 +71,12 @@ export default function RewriteWorkshop({ initialContentId }) {
   };
 
   const handleGenerate = async () => {
-    if (!selectedContent) return alert('请先选择模板');
+    if (!selectedContent && !freeBrief) return alert('请先选择模板，或在灵感首页用「去仿写」带入选题方向');
     setGenerating(true);
     try {
       const data = await rewriteAPI.run({
-        content_id: selectedContent,
+        content_id: selectedContent || null,
+        brief: selectedContent ? '' : freeBrief,
         hotwords: selectedHotwords,
         style,
         count,
@@ -138,6 +149,25 @@ export default function RewriteWorkshop({ initialContentId }) {
           }}>{t.l}</button>
         ))}
       </div>
+
+      {/* 来自灵感首页的自由选题方向 */}
+      {freeBrief && (
+        <div style={{ padding: 14, marginBottom: 20, borderRadius: 10, background: 'linear-gradient(135deg,#fef3c7 0%,#fce7f3 100%)', border: '1px solid #fcd34d', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <div style={{ fontSize: 22 }}>🌟</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#92400e', marginBottom: 4 }}>来自灵感首页的选题方向</div>
+            <div style={{ fontSize: 13, color: '#78350f', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{freeBrief}</div>
+            <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button onClick={handleGenerate} disabled={generating} style={{
+                padding: '8px 16px', borderRadius: 8, border: 'none', cursor: generating ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600, color: '#fff',
+                background: 'linear-gradient(135deg,#7c3aed 0%,#ec4899 100%)',
+              }}>{generating ? '⏳ 生成中...' : '🚀 用这个方向直接写'}</button>
+              <button onClick={() => setFreeBrief('')} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #d8b4fe', background: '#fff', color: '#7c3aed', cursor: 'pointer', fontSize: 12 }}>清除</button>
+              <span style={{ fontSize: 12, color: '#a16207' }}>选好下方笔记类型后点此生成（无需模板）</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {tab === 'generate' ? (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
@@ -244,11 +274,11 @@ export default function RewriteWorkshop({ initialContentId }) {
                   style={{ flex: 1 }} />
                 <span style={{ fontSize: 16, fontWeight: 700, color: '#7c3aed' }}>{count}</span>
               </div>
-              <button onClick={handleGenerate} disabled={generating || !selectedContent} style={{
+              <button onClick={handleGenerate} disabled={generating || (!selectedContent && !freeBrief)} style={{
                 ...btnPrimaryStyle, width: '100%', padding: '14px', fontSize: 15,
-                opacity: (generating || !selectedContent) ? 0.5 : 1,
-                background: (generating || !selectedContent) ? '#9ca3af' : 'linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)',
-                boxShadow: (generating || !selectedContent) ? 'none' : '0 4px 12px rgba(124, 58, 237, 0.3)',
+                opacity: (generating || (!selectedContent && !freeBrief)) ? 0.5 : 1,
+                background: (generating || (!selectedContent && !freeBrief)) ? '#9ca3af' : 'linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)',
+                boxShadow: (generating || (!selectedContent && !freeBrief)) ? 'none' : '0 4px 12px rgba(124, 58, 237, 0.3)',
               }}>
                 {generating ? '⏳ AI 创作中...' : '🚀 开始生成'}
               </button>

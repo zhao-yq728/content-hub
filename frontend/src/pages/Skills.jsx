@@ -46,13 +46,14 @@ export default function Skills({ onNavigate }) {
   const [results, setResults] = useState({});   // skillId -> 文本
   const [loading, setLoading] = useState({});
   const [error, setError] = useState(null);
-  const [baziInput, setBaziInput] = useState('');
+  const [inputs, setInputs] = useState({});      // skillId -> 文本输入
+  const [noteTypes, setNoteTypes] = useState({}); // skillId -> 笔记类型
 
-  async function runSkill(id, buildPrompt, input) {
+  async function runSkill(id, buildPrompt, input, noteType) {
     setLoading(l => ({ ...l, [id]: true }));
     setError(null);
     try {
-      const prompt = buildPrompt(input);
+      const prompt = buildPrompt(input, noteType);
       const sys = '你是内容创作者背后的玄学顾问，输出可直接用于小红书/朋友圈/短视频口播的玄学内容。语气稳、准、有层次，不恐吓、不绝对化。';
       const text = await callAI(prompt, sys);
       setResults(r => ({ ...r, [id]: text }));
@@ -132,6 +133,33 @@ export default function Skills({ onNavigate }) {
         return `请生成今天的「能量日签」（用于疗愈/玄学账号日更卡片）。\n输出：\n1. 今日能量基调（一词，如"沉淀""破局""温柔"）；\n2. 幸运色（含一个搭配建议）；\n3. 幸运数字；\n4. 有利方位（如正北/东南）；\n5. 一句能量语（疗愈、有呼吸感，30 字内）；\n6. 今天适合做 / 不适合做的事各 2 条。\n语气：温柔、有呼吸感，允许句子长短不齐。`;
       },
     },
+    {
+      id: 'redbook',
+      icon: '📕',
+      title: '玄学小红书笔记',
+      desc: '输入主题 + 选笔记类型，一键生成可直接发的小红书爆款笔记（套用爆款公式）',
+      needsInput: true,
+      inputLabel: '主题 / 关键词（如：水逆期间怎么自保、巨蟹座本月桃花）',
+      typeOptions: [
+        { v: 'review', t: '种草测评' },
+        { v: 'tutorial', t: '干货教程' },
+        { v: 'collection', t: '合集盘点' },
+        { v: 'avoid', t: '避雷拔草' },
+        { v: 'vlog', t: 'Vlog 叙事' },
+      ],
+      buildPrompt: (input, noteType) => {
+        const map = {
+          review: '种草测评型（痛点共鸣 → 方法/产品引入 → 分维度对比 → 推荐结论）',
+          tutorial: '干货教程型（问题场景 → 解决方法 → 分步操作 → 效果展示）',
+          collection: '合集盘点型（需求定义 → 筛选标准 → 分项推荐 → 总结对比）',
+          avoid: '避雷拔草型（期待 vs 现实 → 问题罗列 → 替代方案 → 省钱建议）',
+          vlog: 'Vlog 叙事型（开始状态 → 转折事件 → 解决方案 → 结果 + 感受）',
+        };
+        const type = map[noteType] || map.tutorial;
+        const topic = input && input.trim() ? input.trim() : '近期玄学/疗愈热点';
+        return `你是一位精通小红书平台的玄学/疗愈内容创作者，风格自然、有真人感。请以"${topic}"为主题，写一篇【${type}】的小红书笔记。\n\n写作要求：\n1. 标题要有爆款感：可用数字型（"3个""5招"）、情绪型（"绝了""后悔没早看"）、悬念型（"99%的人不知道"），要让人刷到想点；\n2. 正文严格按【${type}】的结构展开；\n3. 排版规范：多用换行和 emoji 分段（每段≤5行）、关键信息**加粗**、语气自然不端着、正文 300-800 字；\n4. 结尾必须引导互动（评论 / 收藏 / 关注其一即可）；\n5. 配图建议：给出封面方向 + 2-3 张内页方向。\n\n严格按以下格式输出：\n📌 标题：[标题]\n---\n[正文]\n---\n🏷️ 标签\n#标签1 #标签2\n##标签3 ##标签4\n###标签5 ###标签6 ###标签7\n---\n📸 配图建议\n- 封面：[描述]\n- 图2：[描述]\n- 图3：[描述]`;
+      },
+    },
   ];
 
   return (
@@ -157,12 +185,20 @@ export default function Skills({ onNavigate }) {
             <div style={{ fontSize: 13, color: '#868e96', marginBottom: 12, minHeight: 38 }}>{skill.desc}</div>
 
             {skill.needsInput && (
-              <input value={baziInput} onChange={e => setBaziInput(e.target.value)}
+              <input value={inputs[skill.id] || ''} onChange={e => setInputs(s => ({ ...s, [skill.id]: e.target.value }))}
                 placeholder={skill.inputLabel}
                 style={{ width: '100%', padding: '8px 10px', border: '1px solid #dee2e6', borderRadius: 8, fontSize: 13, marginBottom: 10, outline: 'none', boxSizing: 'border-box' }} />
             )}
 
-            <button onClick={() => runSkill(skill.id, skill.buildPrompt, baziInput)} disabled={loading[skill.id]}
+            {skill.typeOptions && (
+              <select value={noteTypes[skill.id] || skill.typeOptions[0].v}
+                onChange={e => setNoteTypes(s => ({ ...s, [skill.id]: e.target.value }))}
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid #dee2e6', borderRadius: 8, fontSize: 13, marginBottom: 10, outline: 'none', boxSizing: 'border-box', backgroundColor: '#fff', color: '#495057' }}>
+                {skill.typeOptions.map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
+              </select>
+            )}
+
+            <button onClick={() => runSkill(skill.id, skill.buildPrompt, inputs[skill.id], noteTypes[skill.id] || (skill.typeOptions?.[0]?.v))} disabled={loading[skill.id]}
               style={{ width: '100%', padding: '10px', borderRadius: 8, border: 'none', cursor: loading[skill.id] ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600, color: '#fff', background: 'linear-gradient(135deg,#7c3aed,#ec4899)' }}>
               {loading[skill.id] ? '⏳ 生成中...' : '✨ 生成内容'}
             </button>
