@@ -1,24 +1,32 @@
 import { useState } from 'react';
 import Layout from './components/Layout';
 import Home from './pages/Home';
+import Inspire from './pages/Inspire';
 import ContentLibrary from './pages/ContentLibrary';
 import DeconstructionView from './pages/DeconstructionView';
 import RewriteWorkshop from './pages/RewriteWorkshop';
 import Categories from './pages/Categories';
 import HotWords from './pages/HotWords';
 import Settings from './pages/Settings';
+import Skills from './pages/Skills';
 
 export default function App() {
   const [page, setPage] = useState('home');
   const [deconstructId, setDeconstructId] = useState(null);
   const [libraryFilter, setLibraryFilter] = useState({ category: '', keyword: '' });
   const [rewriteFromId, setRewriteFromId] = useState(null);
+  const [rewriteBrief, setRewriteBrief] = useState(null);
 
   const handleNavigate = (key) => {
     setPage(key);
     if (key !== 'deconstruct') setDeconstructId(null);
     if (key !== 'library') setLibraryFilter({ category: '', keyword: '' });
-    if (key !== 'rewrite') setRewriteFromId(null);
+    if (key !== 'rewrite') { setRewriteFromId(null); setRewriteBrief(null); }
+  };
+
+  const handleRewriteBrief = (brief) => {
+    setRewriteBrief(brief);
+    setPage('rewrite');
   };
 
   const handleViewDeconstruct = (contentId) => {
@@ -40,6 +48,8 @@ export default function App() {
     switch (page) {
       case 'home':
         return <Home onNavigate={handleNavigate} />;
+      case 'inspire':
+        return <Inspire onNavigate={handleNavigate} onRewriteBrief={handleRewriteBrief} />;
       case 'library':
         return <ContentLibrary onViewDeconstruct={handleViewDeconstruct} initialFilter={libraryFilter} />;
       case 'deconstruct':
@@ -51,11 +61,13 @@ export default function App() {
           />
         );
       case 'rewrite':
-        return <RewriteWorkshop initialContentId={rewriteFromId} />;
+        return <RewriteWorkshop initialContentId={rewriteFromId} initialBrief={rewriteBrief} />;
       case 'categories':
         return <Categories onCategoryClick={handleCategoryClick} />;
       case 'hotwords':
         return <HotWords onNavigate={handleNavigate} />;
+      case 'skills':
+        return <Skills onNavigate={handleNavigate} />;
       case 'settings':
         return <Settings />;
       default:
