@@ -3,6 +3,7 @@ import { useState } from 'react';
 const navItems = [
   { key: 'inspire', label: '灵感首页', icon: '🌟' },
   { key: 'skills', label: '玄学技能', icon: '🔮' },
+  { key: 'collection', label: '我的灵感', icon: '💡' },
   { key: 'home', label: '工作台', icon: '🏠' },
   { key: 'library', label: '素材库', icon: '📚' },
   { key: 'deconstruct', label: '拆解中心', icon: '🔬' },

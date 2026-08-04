@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { questionAPI, inspireAPI, contentAPI, callAI } from '../api';
+import { questionAPI, inspireAPI, contentAPI, callAI, savedAPI } from '../api';
 import { getActiveEvents, getMonthEvents, getUpcomingEvents, ZODIAC_SIGNS, YEAR_THEME } from '../data/ephemeris2026';
 
 // ---------- 工具 ----------
@@ -50,6 +50,7 @@ export default function Inspire({ onNavigate, onRewriteBrief }) {
   // 选题
   const [topics, setTopics] = useState([]);
   const [topicLoading, setTopicLoading] = useState(false);
+  const [savedTopics, setSavedTopics] = useState({}); // index -> true
 
   useEffect(() => {
     questionAPI.list().then(setQuestions).catch(() => setQuestions([]));
@@ -179,6 +180,16 @@ export default function Inspire({ onNavigate, onRewriteBrief }) {
   function goRewrite(t) {
     const brief = `选题：${t.title}\n切入角度：${t.angle}\n开头钩子：${t.hook || ''}`;
     if (onRewriteBrief) onRewriteBrief(brief);
+  }
+
+  async function saveTopic(t, i) {
+    await savedAPI.create({
+      type: 'topic',
+      title: t.title,
+      body: `角度：${t.angle}\n钩子：${t.hook || ''}`,
+      meta: { angle: t.angle, hook: t.hook },
+    });
+    setSavedTopics(s => ({ ...s, [i]: true }));
   }
 
   // ---------- 渲染 ----------
@@ -357,6 +368,7 @@ export default function Inspire({ onNavigate, onRewriteBrief }) {
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => copyTopic(t)} style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #dee2e6', background: '#fff', cursor: 'pointer', fontSize: 12 }}>📋 复制</button>
                   <button onClick={() => goRewrite(t)} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: '#7c3aed', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>✍️ 去仿写</button>
+                  <button onClick={() => saveTopic(t, i)} disabled={savedTopics[i]} style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #fde68a', background: savedTopics[i] ? '#fef9c3' : '#fff', color: savedTopics[i] ? '#92660a' : '#b45309', cursor: savedTopics[i] ? 'default' : 'pointer', fontSize: 12, fontWeight: 600 }}>{savedTopics[i] ? '✅ 已收藏' : '⭐ 收藏'}</button>
                 </div>
               </div>
             ))}

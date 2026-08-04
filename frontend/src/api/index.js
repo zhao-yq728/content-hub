@@ -1051,6 +1051,74 @@ export const inspireAPI = {
   },
 };
 
+// ---------- 我的灵感收藏（跨设备） ----------
+// 优先存 Supabase 的 saved_items 表（跨设备可见）；表缺失时回退 localStorage（当前设备）。
+let savedStoreMode = 'unknown'; // 'supabase' | 'local'
+const LS_SAVED_KEY = 'ch_saved_v1';
+
+function lsGetSaved() {
+  try { return JSON.parse(localStorage.getItem(LS_SAVED_KEY) || '[]'); }
+  catch (e) { return []; }
+}
+function lsSaveSaved(arr) {
+  localStorage.setItem(LS_SAVED_KEY, JSON.stringify(arr));
+}
+
+export const savedAPI = {
+  mode() { return savedStoreMode; },
+
+  async list() {
+    try {
+      const { data, error } = await supabase
+        .from('saved_items')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      savedStoreMode = 'supabase';
+      return data || [];
+    } catch (e) {
+      savedStoreMode = 'local';
+      return lsGetSaved().sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
+  },
+
+  async create({ type = 'topic', title = '', body = '', tags = [], meta = {} }) {
+    const item = {
+      id: uid(),
+      type,
+      title: title || '',
+      body: body || '',
+      tags: Array.isArray(tags) ? tags : String(tags || '').split(',').map(s => s.trim()).filter(Boolean),
+      meta: meta || {},
+      created_at: new Date().toISOString(),
+    };
+    try {
+      const { data, error } = await supabase.from('saved_items').insert(item).select().single();
+      if (error) throw error;
+      savedStoreMode = 'supabase';
+      return data;
+    } catch (e) {
+      savedStoreMode = 'local';
+      const arr = lsGetSaved();
+      arr.push(item);
+      lsSaveSaved(arr);
+      return item;
+    }
+  },
+
+  async remove(id) {
+    try {
+      if (savedStoreMode === 'local') throw new Error('local');
+      const { error } = await supabase.from('saved_items').delete().eq('id', id);
+      if (error) throw error;
+    } catch (e) {
+      savedStoreMode = 'local';
+      lsSaveSaved(lsGetSaved().filter(s => s.id !== id));
+    }
+  },
+};
+
 // ============ 导出/导入 API ============
 export const exportAPI = {
   async exportAll() {

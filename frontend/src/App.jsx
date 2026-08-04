@@ -9,6 +9,7 @@ import Categories from './pages/Categories';
 import HotWords from './pages/HotWords';
 import Settings from './pages/Settings';
 import Skills from './pages/Skills';
+import MyCollection from './pages/MyCollection';
 
 export default function App() {
   const [page, setPage] = useState('home');
@@ -68,6 +69,8 @@ export default function App() {
         return <HotWords onNavigate={handleNavigate} />;
       case 'skills':
         return <Skills onNavigate={handleNavigate} />;
+      case 'collection':
+        return <MyCollection onRewriteBrief={handleRewriteBrief} />;
       case 'settings':
         return <Settings />;
       default:

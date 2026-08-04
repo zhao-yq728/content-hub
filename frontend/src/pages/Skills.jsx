@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { callAI } from '../api';
+import { callAI, savedAPI } from '../api';
 import { getActiveEvents, getUpcomingEvents, RETROGRADES } from '../data/ephemeris2026';
 
 // 22 张大阿尔克那（塔罗），用于「每日一牌」抽牌
@@ -48,6 +48,7 @@ export default function Skills({ onNavigate }) {
   const [error, setError] = useState(null);
   const [inputs, setInputs] = useState({});      // skillId -> 文本输入
   const [noteTypes, setNoteTypes] = useState({}); // skillId -> 笔记类型
+  const [savedSet, setSavedSet] = useState({});   // skillId -> true（已收藏标记）
 
   async function runSkill(id, buildPrompt, input, noteType) {
     setLoading(l => ({ ...l, [id]: true }));
@@ -65,6 +66,11 @@ export default function Skills({ onNavigate }) {
 
   function copy(text) {
     if (navigator.clipboard) navigator.clipboard.writeText(text);
+  }
+
+  async function saveResult(skillId, skillTitle, text) {
+    await savedAPI.create({ type: 'skill', title: skillTitle, body: text });
+    setSavedSet(s => ({ ...s, [skillId]: true }));
   }
 
   // ====== 各技能 prompt 构造（结合真实星历 + 命理技能框架） ======
@@ -206,8 +212,9 @@ export default function Skills({ onNavigate }) {
             {results[skill.id] && (
               <div style={{ marginTop: 12, padding: 12, borderRadius: 8, background: '#faf5ff', border: '1px solid #ede9fe', fontSize: 13, color: '#374151', whiteSpace: 'pre-wrap', maxHeight: 320, overflowY: 'auto', lineHeight: 1.7 }}>
                 {results[skill.id]}
-                <div style={{ marginTop: 10, textAlign: 'right' }}>
+                <div style={{ marginTop: 10, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                   <button onClick={() => copy(results[skill.id])} style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid #dee2e6', background: '#fff', cursor: 'pointer', fontSize: 12 }}>📋 复制</button>
+                  <button onClick={() => saveResult(skill.id, skill.title, results[skill.id])} disabled={savedSet[skill.id]} style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid #fde68a', background: savedSet[skill.id] ? '#fef9c3' : '#fff', color: savedSet[skill.id] ? '#92660a' : '#b45309', cursor: savedSet[skill.id] ? 'default' : 'pointer', fontSize: 12, fontWeight: 600 }}>{savedSet[skill.id] ? '✅ 已收藏' : '⭐ 收藏'}</button>
                 </div>
               </div>
             )}
