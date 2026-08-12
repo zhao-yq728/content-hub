@@ -135,14 +135,22 @@ export default function DeconstructionView({ contentId, onBack, onRewrite }) {
       </div>
 
       {/* 2. 六大核心基因 */}
-      <div style={{ fontSize: 14, fontWeight: 600, color: '#212529', marginBottom: 10 }}>🧬 六大爆款基因</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: '#212529' }}>🧬 六大爆款基因</div>
+        <button
+          onClick={async () => { setLoading(true); await deconstructAPI.run(contentId, true); await loadDeconstruction(contentId); }}
+          style={{ fontSize: 12, color: '#7c3aed', background: '#f3f0ff', border: '1px solid #d8b4fe', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}
+        >
+          🔄 重新拆解
+        </button>
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12, marginBottom: 16 }}>
-        <GeneCard label="标题公式" value={decon.title_formula} color="#7c3aed" icon="📝" />
-        <GeneCard label="开篇钩子" value={decon.hook_type} color="#3b82f6" icon="🎣" />
-        <GeneCard label="正文结构" value={decon.content_structure} color="#10b981" icon="🏗" />
-        <GeneCard label="情绪曲线" value={decon.emotion_curve} color="#f59e0b" icon="🌊" />
-        <GeneCard label="互动引导" value={decon.engagement_hooks} color="#ec4899" icon="💬" />
-        <GeneCard label="视觉风格" value={decon.visual_style} color="#6366f1" icon="🎨" />
+        <GeneCard label="标题公式" value={decon.title_formula} reason={decon.gene_reasons?.title_formula} color="#7c3aed" icon="📝" />
+        <GeneCard label="开篇钩子" value={decon.hook_type} reason={decon.gene_reasons?.hook} color="#3b82f6" icon="🎣" />
+        <GeneCard label="正文结构" value={decon.content_structure} reason={decon.gene_reasons?.content_structure} color="#10b981" icon="🏗" />
+        <GeneCard label="情绪曲线" value={decon.emotion_curve} reason={decon.gene_reasons?.emotion_curve} color="#f59e0b" icon="🌊" />
+        <GeneCard label="互动引导" value={decon.engagement_hooks} reason={decon.gene_reasons?.engagement_hooks} color="#ec4899" icon="💬" />
+        <GeneCard label="视觉风格" value={decon.visual_style} reason={decon.gene_reasons?.visual_style} color="#6366f1" icon="🎨" />
       </div>
 
       {/* 3. 可复用爆款基因 */}
@@ -221,7 +229,7 @@ export default function DeconstructionView({ contentId, onBack, onRewrite }) {
   );
 }
 
-function GeneCard({ label, value, color, icon }) {
+function GeneCard({ label, value, reason, color, icon }) {
   return (
     <div style={{
       padding: 14, borderRadius: 10, backgroundColor: '#fff', border: '1px solid #e9ecef',
@@ -231,6 +239,12 @@ function GeneCard({ label, value, color, icon }) {
         <span>{icon}</span> {label}
       </div>
       <div style={{ fontSize: 13, color: '#212529', lineHeight: 1.7 }}>{value || '—'}</div>
+      {reason && (
+        <div style={{ marginTop: 10, padding: 10, borderRadius: 6, backgroundColor: '#f9fafb', borderLeft: `3px solid ${color}` }}>
+          <div style={{ fontSize: 11, color, fontWeight: 600, marginBottom: 4 }}>💡 原因</div>
+          <div style={{ fontSize: 12, color: '#4b5563', lineHeight: 1.6 }}>{reason}</div>
+        </div>
+      )}
     </div>
   );
 }

@@ -502,9 +502,14 @@ export default function ContentLibrary({ onViewDeconstruct, initialFilter = {} }
                   </button>
                 )}
                 {c.has_deconstruction && (
-                  <button onClick={() => onViewDeconstruct && onViewDeconstruct(c.id)} style={{ ...btnSmStyle, backgroundColor: '#f3f0ff', color: '#7c3aed' }}>
-                    查看拆解
-                  </button>
+                  <>
+                    <button onClick={() => onViewDeconstruct && onViewDeconstruct(c.id)} style={{ ...btnSmStyle, backgroundColor: '#f3f0ff', color: '#7c3aed' }}>
+                      查看拆解
+                    </button>
+                    <button onClick={() => handleDeconstruct(c.id)} disabled={deconstructing === c.id} style={{ ...btnSmStyle, backgroundColor: '#fff', color: '#7c3aed', border: '1px solid #d8b4fe' }}>
+                      {deconstructing === c.id ? '拆解中...' : '🔄 重拆'}
+                    </button>
+                  </>
                 )}
                 <button onClick={() => handleDelete(c.id)} style={{ ...btnSmStyle, backgroundColor: '#fff', color: '#ef4444', border: '1px solid #fecaca' }}>
                   删除

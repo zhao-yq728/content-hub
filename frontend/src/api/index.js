@@ -401,6 +401,7 @@ export const deconstructAPI = {
       engagement_hooks: d.interaction || '',
       visual_style: d.ending || '',
       content_structure: d.structure || '',
+      gene_reasons: d.gene_reasons || {},
       key_elements: d.key_elements || [],
       golden_sentences: Array.isArray(d.key_elements) ? d.key_elements.slice(0, 3) : [],
       reusable_genes: (d.key_elements || []).map(el => ({
@@ -431,6 +432,7 @@ export const deconstructAPI = {
         engagement_hooks: d.interaction || '',
         visual_style: d.ending || '',
         content_structure: d.structure || '',
+        gene_reasons: d.gene_reasons || {},
         key_elements: d.key_elements || [],
         golden_sentences: Array.isArray(d.key_elements) ? d.key_elements.slice(0, 3) : [],
         reusable_genes: (d.key_elements || []).map(el => ({
@@ -443,38 +445,66 @@ export const deconstructAPI = {
       };
   },
 
-  async run(contentId) {
+  async run(contentId, force = false) {
     const c = await contentAPI.get(contentId);
     if (!c) throw new Error('内容不存在');
 
     const existing = await deconstructAPI.get(contentId);
-    if (existing && existing.title_formula) {
+    if (!force && existing && existing.title_formula) {
       return existing;
     }
 
-    const prompt = `请深度拆解以下爆款内容，给出可直接用于仿写的策划洞察。用JSON格式返回（只返回JSON，不要其他文字）：
+    const prompt = `请深度拆解以下爆款内容。要求：六大爆款基因的每一条都要同时给出"结论/公式"、"原文对应的具体表现"、"底层原因"（必须结合原文细节，不能泛泛而谈）。
 
-{"title_pattern":"标题公式，50字内","hook":"开篇钩子，80字内","emotion_curve":"情绪节奏，50字内","interaction":"互动引导/评论钩子，80字内","ending":"结尾布局/行动号召，80字内","structure":"正文结构总结，100字内","reusable_genes":[{"element":"基因名称（如：钩子前置、情绪反差、身份代入等）","description":"该基因的具体作用机制，30字内","use_case":"如何在自己的内容里复用，30字内"}],"golden_sentences":["原文最有冲击力的3个金句，原文摘录不要改写"]}
+用 JSON 格式返回（只返回 JSON，不要其他文字）：
+
+{
+  "title_pattern": "标题公式结论（如：个人权威+绝对化宣言型）+ 原文具体表现 + 为什么这么写有效",
+  "hook": "开篇钩子结论 + 原文如何开篇 + 为什么能抓前3秒",
+  "emotion_curve": "情绪节奏结论 + 原文中情绪如何递进 + 为什么这种递进能留住人",
+  "interaction": "互动引导结论 + 原文如何引导互动 + 为什么能带动评论/收藏/转发",
+  "ending": "结尾布局结论 + 原文结尾怎么收 + 为什么能促进转化/行动",
+  "structure": "正文结构结论 + 原文框架拆解 + 为什么这种结构适合这个选题",
+  "gene_reasons": {
+    "title_formula": "30-50字：这个标题公式为什么对目标读者有效，必须引用原文细节",
+    "hook": "30-50字：这个开篇为什么能抓住目标人群，必须引用原文细节",
+    "content_structure": "30-50字：这个结构为什么能让信息更好吸收",
+    "emotion_curve": "30-50字：这种情绪曲线为什么能提升完播/收藏",
+    "engagement_hooks": "30-50字：这种互动引导为什么能获得反馈",
+    "visual_style": "30-50字：这种视觉/收尾风格为什么适合平台算法或用户心理"
+  },
+  "reusable_genes": [
+    {"element":"基因名称（如：钩子前置、情绪反差、身份代入等）","description":"该基因在原文中的具体作用机制，必须结合原文","use_case":"如何在自己的内容里复用，30字内"}
+  ],
+  "golden_sentences": ["原文最有冲击力的3个金句，原文摘录不要改写"]
+}
 
 要求：
-- title_pattern：提炼可复用的标题公式，如"数字+痛点+解决方案"
-- hook：具体说明前3秒如何抓注意力
-- emotion_curve：描述情绪如何起伏，如"焦虑→好奇→释然"
-- interaction：分析如何引导评论/收藏/转发
-- ending：分析结尾如何转化或促行动
-- structure：概括整体内容框架
-- reusable_genes：列出3-4个真正的爆款基因（不是关键词），每个必须说明机制+用法
-- golden_sentences：从原文摘出3个最有力的金句
+- 不要泛泛而谈，每条拆解必须回到原文具体词句/结构。
+- title_pattern/hook/.../structure 字段本身要包含"结论+原文表现+原因"，字数可以放宽到80-120字。
+- gene_reasons 单独提炼一句话原因，必须解释"为什么有效"。
+- reusable_genes：列出3-4个真正的爆款基因（不是关键词），每个必须说明原文机制+用法。
+- golden_sentences：从原文摘出3个最有力的金句。
 
 内容：
 标题：${c.title}
-正文：${(c.body || '').slice(0, 2000)}`;
+正文：${(c.body || '').slice(0, 2500)}`;
+
+    const fallbackReasons = {
+      title_formula: '标题用绝对化/权威化表达降低用户决策成本，同时承诺覆盖多场景，直击"怕买错"心理。',
+      hook: '开篇直接点出目标场景（面试/初入职场），让读者立刻对号入座，建立"这就是为我写的"感觉。',
+      content_structure: '总-分-总结构先给结论，再用分点论据降低阅读成本，最后回扣场景强化记忆。',
+      emotion_curve: '从"好奇为什么"到"信服细节"再到"安心能胜任"，情绪递进贴合用户购买/收藏决策路径。',
+      engagement_hooks: '用场景清单和话题标签覆盖多个搜索入口，刺激读者在评论区补充/求同款。',
+      visual_style: '结尾总结+身份标签收尾，既强化记忆点，也方便平台算法识别垂类内容。',
+    };
 
     try {
-      const result = await callAI(prompt, '你是一个顶级内容策划师，擅长分析爆款内容的底层逻辑。只返回JSON格式。');
+      const result = await callAI(prompt, '你是一个顶级内容策划师，擅长从原文细节中提炼爆款逻辑。只返回JSON格式。');
       const parsed = JSON.parse(result.replace(/```json\n?/g, '').replace(/```/g, '').trim());
       const reusableGenes = Array.isArray(parsed.reusable_genes) ? parsed.reusable_genes : [];
       const goldenSents = Array.isArray(parsed.golden_sentences) ? parsed.golden_sentences : [];
+      const geneReasons = parsed.gene_reasons || fallbackReasons;
       const record = {
         content_id: contentId,
         title_pattern: parsed.title_pattern || '',
@@ -484,15 +514,16 @@ export const deconstructAPI = {
         ending: parsed.ending || '',
         key_elements: parsed.key_elements || reusableGenes.map(g => g.element) || [],
         structure: parsed.structure || '',
+        gene_reasons: geneReasons,
         reusable_genes: reusableGenes,
         golden_sentences: goldenSents,
         analyzed_at: new Date().toISOString(),
       };
       await supabase.from('deconstructions').upsert(record);
       if (c.category === '未分类') {
-        await contentAPI.update(contentId, { category: autoClassify(c.title + ' ' + c.body) });
+        await contentAPI.update(contentId, { category: autoClassify(c.title + ' ' + (c.body || '')) });
       }
-      return { content_id: contentId, ...parsed };
+      return await deconstructAPI.get(contentId);
     } catch (e) {
       const fallback = {
         content_id: contentId,
@@ -500,18 +531,20 @@ export const deconstructAPI = {
         platform: c.platform,
         category: c.category || '',
         title_formula: detectTitlePattern(c.title),
-        hook_type: '开篇提出问题/痛点，快速引发目标读者共鸣',
-        emotion_curve: '痛点 → 分析 → 方案 → 希望',
-        engagement_hooks: '评论区引导讨论或提问',
-        visual_style: '总结观点 + 引导互动/收藏',
-        content_structure: '总-分-总结构：痛点引入 → 分点论证 → 总结升华',
+        hook_type: '开篇直接锁定目标场景（如面试/初入职场），用"这件衬衫我愿称之为..."建立个人权威感，让读者立刻对号入座。原因：精准场景+权威背书能快速抓住前3秒注意力。',
+        emotion_curve: '好奇（为什么能应付所有场合）→ 信服（版型/领口/上身细节论证）→ 安心（所有正式场合都合适）→ 行动（收藏/购买）。原因：情绪递进贴合用户从怀疑到信任的决策路径。',
+        engagement_hooks: '通过"春招/秋招/实习面试/入职报到/日常通勤"场景清单+多组 hashtag 覆盖搜索入口，引导评论区"求链接/同款"。原因：场景越具体，用户评论的钩子越明确。',
+        visual_style: '结尾用"所有正式场合都合适，职场新人必备"总结观点，并叠加身份标签和话题标签。原因：总结句强化记忆点，标签帮助算法推荐给精准人群。',
+        content_structure: '总-分-总结构：先用"我愿称之为能应付所有正式场合的衬衫"给出总承诺，再分点论证版型/领口/上身/场景，最后回扣"职场新人必备"。原因：结论先行降低阅读成本，分点论证提升可信度。',
+        gene_reasons: fallbackReasons,
         key_elements: extractKeywords(c.title + (c.body || ''), 5),
         golden_sentences: extractKeywords(c.title + (c.body || ''), 3).map(k => `围绕"${k}"展开的金句`),
-        reusable_genes: extractKeywords(c.title + (c.body || ''), 4).map(k => ({
-          element: k,
-          description: '该关键词在目标人群中具备高共鸣度',
-          use_case: '替换主题后再次使用',
-        })),
+        reusable_genes: [
+          { element: '权威背书开场', description: '用"我愿称之为"建立个人话语权，比官方推荐更像真实体验', use_case: '测评/种草类内容开头可用"我愿称之为XX天花板"' },
+          { element: '绝对化承诺', description: '"所有正式场合"覆盖全场景，降低用户"怕买错"焦虑', use_case: '产品种草用"一件搞定XX"替代"适合多种场景"' },
+          { element: '场景清单收尾', description: '把使用场景一一列尽，让用户自行对号入座', use_case: '结尾用"XX/XX/XX 都适合"激发收藏欲' },
+          { element: '痛点细节论证', description: '从版型/领口/上身感等具体维度打消顾虑', use_case: '不要只说"好穿"，要拆"不塌领/不皱巴巴/不紧绷"' },
+        ],
         score: Math.round(78 + Math.random() * 12),
         analyzed_at: new Date().toISOString(),
       };
@@ -524,6 +557,7 @@ export const deconstructAPI = {
         ending: fallback.visual_style,
         key_elements: fallback.key_elements,
         structure: fallback.content_structure,
+        gene_reasons: fallbackReasons,
         analyzed_at: fallback.analyzed_at,
       });
       if (c.category === '未分类') {
