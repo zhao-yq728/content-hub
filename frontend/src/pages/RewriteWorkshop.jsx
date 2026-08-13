@@ -23,6 +23,7 @@ const NOTE_TYPES = {
 export default function RewriteWorkshop({ initialContentId, initialBrief, onNavigate }) {
   const [contents, setContents] = useState([]);
   const [hotwords, setHotwords] = useState([]);
+  const [hotwordOffset, setHotwordOffset] = useState({}); // 每个分类的换一批偏移
   const [selectedContent, setSelectedContent] = useState(initialContentId || null);
   const [freeBrief, setFreeBrief] = useState(initialBrief || '');
   const [selectedHotwords, setSelectedHotwords] = useState([]);
@@ -35,11 +36,16 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
   const [showHelp, setShowHelp] = useState(!initialContentId && !initialBrief);
   const [sourceDecon, setSourceDecon] = useState(null);
 
-  const loadHotwords = (n = 50) => {
+  const loadHotwords = (n = 300) => {
     hotwordAPI.top(n).then(data => {
       const classified = (data || []).map(w => ({ ...w, category: w.category || classifyWord(w.word) }));
       setHotwords(classified);
+      setHotwordOffset({}); // 重置偏移
     }).catch(console.error);
+  };
+
+  const shuffleCategory = (cat) => {
+    setHotwordOffset(prev => ({ ...prev, [cat]: (prev[cat] || 0) + 1 }));
   };
 
   useEffect(() => {
@@ -256,7 +262,7 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
                   选择热词组合（可选）
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <button onClick={() => loadHotwords(50)} style={{
+                  <button onClick={() => loadHotwords(300)} style={{
                     padding: '4px 10px', borderRadius: 6, border: '1px solid #dee2e6',
                     background: '#fff', color: '#495057', fontSize: 11, cursor: 'pointer',
                   }}>🔄 刷新热词</button>
@@ -279,33 +285,56 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
                     </div>
                   );
                 }
+                const PER_CAT = 10;
                 return (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 220, overflowY: 'auto', paddingRight: 4 }}>
-                    {sortedCategories.map(cat => (
-                      <div key={cat} style={{
-                        padding: 10, borderRadius: 8, backgroundColor: '#fff', border: '1px solid #e9ecef',
-                        borderLeft: '3px solid ' + (CATEGORY_COLORS[cat] || '#94a3b8'),
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: CATEGORY_COLORS[cat] || '#475569' }}>🏷 {cat}</span>
-                          <span style={{ fontSize: 11, color: '#868e96' }}>({grouped[cat].length})</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 260, overflowY: 'auto', paddingRight: 4 }}>
+                    {sortedCategories.map(cat => {
+                      const all = grouped[cat].sort((a, b) => (b.count || 0) - (a.count || 0));
+                      const offset = hotwordOffset[cat] || 0;
+                      const sliceStart = (offset * PER_CAT) % Math.max(all.length, 1);
+                      // 如果剩余不足 PER_CAT，循环拼接
+                      let slice = [];
+                      if (all.length <= PER_CAT) {
+                        slice = all;
+                      } else {
+                        for (let i = 0; i < PER_CAT; i++) {
+                          slice.push(all[(sliceStart + i) % all.length]);
+                        }
+                      }
+                      return (
+                        <div key={cat} style={{
+                          padding: 10, borderRadius: 8, backgroundColor: '#fff', border: '1px solid #e9ecef',
+                          borderLeft: '3px solid ' + (CATEGORY_COLORS[cat] || '#94a3b8'),
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: CATEGORY_COLORS[cat] || '#475569' }}>🏷 {cat}</span>
+                              <span style={{ fontSize: 11, color: '#868e96' }}>(共 {grouped[cat].length} 个)</span>
+                            </div>
+                            {all.length > PER_CAT && (
+                              <button onClick={() => shuffleCategory(cat)} style={{
+                                padding: '2px 8px', borderRadius: 10, border: '1px solid #e9ecef',
+                                background: '#f8f9fa', color: '#868e96', fontSize: 11, cursor: 'pointer',
+                              }}>🔄 换一批</button>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            {slice.map(hw => (
+                              <button key={hw.id || hw.word} onClick={() => toggleHotword(hw.word)} style={{
+                                padding: '4px 10px', borderRadius: 20,
+                                border: '1px solid ' + (selectedHotwords.includes(hw.word) ? CATEGORY_COLORS[cat] || '#7c3aed' : '#dee2e6'),
+                                fontSize: 12,
+                                backgroundColor: selectedHotwords.includes(hw.word) ? (CATEGORY_COLORS[cat] || '#7c3aed') : '#fff',
+                                color: selectedHotwords.includes(hw.word) ? '#fff' : '#495057',
+                                cursor: 'pointer',
+                              }} title={'频次: ' + (hw.count || hw.frequency || 0)}>
+                                {hw.word}
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                          {grouped[cat].map(hw => (
-                            <button key={hw.id || hw.word} onClick={() => toggleHotword(hw.word)} style={{
-                              padding: '4px 10px', borderRadius: 20,
-                              border: '1px solid ' + (selectedHotwords.includes(hw.word) ? CATEGORY_COLORS[cat] || '#7c3aed' : '#dee2e6'),
-                              fontSize: 12,
-                              backgroundColor: selectedHotwords.includes(hw.word) ? (CATEGORY_COLORS[cat] || '#7c3aed') : '#fff',
-                              color: selectedHotwords.includes(hw.word) ? '#fff' : '#495057',
-                              cursor: 'pointer',
-                            }} title={'频次: ' + (hw.count || hw.frequency || 0)}>
-                              {hw.word}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 );
               })()}
