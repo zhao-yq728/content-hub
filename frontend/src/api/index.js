@@ -704,7 +704,11 @@ export const rewriteAPI = {
 
     try {
       const result = await callAI(prompt, '你是爆款内容专家，擅长结构仿写。只返回纯JSON，不要任何额外文字。');
-      let cleaned = result.replace(/```json\s*/g, '').replace(/```/g, '').trim();
+      let cleaned = result
+        .replace(/```json\s*/g, '')
+        .replace(/```/g, '')
+        .replace(/[\x00-\x1F\x7F]/g, ' ') // 清理 AI 偶尔返回的非法控制字符，避免 JSON.parse 失败
+        .trim();
       const parsed = JSON.parse(cleaned);
       if (!parsed.items || !Array.isArray(parsed.items) || parsed.items.length === 0) {
         throw new Error('AI 返回数据格式异常：未包含 items 数组');
