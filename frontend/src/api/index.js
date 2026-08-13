@@ -24,6 +24,56 @@ function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
+// 鲁棒解析 AI 返回的 JSON：先正常 parse，失败则自动补全被截断的字符串/括号/数组，最后降级用正则提取
+function safeParseRewriteJson(raw) {
+  if (!raw || typeof raw !== 'string') throw new Error('AI 返回为空');
+
+  let text = raw
+    .replace(/```json\s*/g, '')
+    .replace(/```/g, '')
+    .replace(/[\x00-\x1F\x7F]/g, ' ')
+    .trim();
+  if (!text) throw new Error('AI 返回为空');
+
+  // 尝试 1：直接 parse
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && Array.isArray(parsed.items)) return parsed;
+  } catch (_) { /* 继续修复 */ }
+
+  // 尝试 2：去掉尾部未完成的转义反斜杠，并补全未闭合字符串
+  let fixed = text.replace(/\\+$/g, m => (m.length % 2 === 0 ? m : m.slice(0, -1))); // 去掉单个末尾 \
+  // 如果最后一个 " 未闭合（后面没有偶数个引号），补全
+  const openQuotes = (fixed.match(/"/g) || []).length;
+  if (openQuotes % 2 !== 0) fixed += '"';
+  // 补全缺失的 } / ]
+  let openCurly = 0, openSquare = 0;
+  for (const ch of fixed) {
+    if (ch === '{') openCurly++;
+    else if (ch === '}') openCurly--;
+    else if (ch === '[') openSquare++;
+    else if (ch === ']') openSquare--;
+  }
+  while (openSquare > 0) { fixed += ']'; openSquare--; }
+  while (openCurly > 0) { fixed += '}'; openCurly--; }
+
+  try {
+    const parsed = JSON.parse(fixed);
+    if (parsed && Array.isArray(parsed.items)) return parsed;
+  } catch (_) { /* 继续正则兜底 */ }
+
+  // 尝试 3：正则暴力提取 {"title":"...","body":"..."} 结构
+  const items = [];
+  const re = /\{\s*"title"\s*:\s*"([^"]*)"\s*,\s*"body"\s*:\s*"([^"]*)"(?:\s*,\s*"angle"\s*:\s*"([^"]*)")?\s*\}/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    items.push({ title: m[1] || '', body: m[2] || '', angle: m[3] || '' });
+  }
+  if (items.length > 0) return { items };
+
+  throw new Error('无法解析 AI 返回的 JSON，请检查 AI 输出是否完整');
+}
+
 // ---------- AI API 调用 ----------
 export async function callAI(prompt, systemPrompt) {
   const cfg = await configAPI.get();
@@ -647,7 +697,7 @@ export const rewriteAPI = {
       '5. 不要用"好物分享""亲测有效"这种模板化开头\n' +
       '6. 标签必须用#号开头，附在正文后面\n\n' +
       '【输出格式】\n' +
-      '用JSON格式返回（不要其他文字，不要 ```json 包装）：\n' +
+      '用JSON格式返回（不要其他文字，不要 ```json 包装），必须输出完整可解析的JSON，不要截断：\n' +
       '{"items":[' + exampleItems + ']}';
 
     let prompt;
@@ -703,13 +753,8 @@ export const rewriteAPI = {
     }
 
     try {
-      const result = await callAI(prompt, '你是爆款内容专家，擅长结构仿写。只返回纯JSON，不要任何额外文字。');
-      let cleaned = result
-        .replace(/```json\s*/g, '')
-        .replace(/```/g, '')
-        .replace(/[\x00-\x1F\x7F]/g, ' ') // 清理 AI 偶尔返回的非法控制字符，避免 JSON.parse 失败
-        .trim();
-      const parsed = JSON.parse(cleaned);
+      const result = await callAI(prompt, '你是爆款内容专家，擅长结构仿写。只返回纯JSON，不要任何额外文字。必须输出完整、可解析的JSON，不要截断。');
+      const parsed = safeParseRewriteJson(result);
       if (!parsed.items || !Array.isArray(parsed.items) || parsed.items.length === 0) {
         throw new Error('AI 返回数据格式异常：未包含 items 数组');
       }
