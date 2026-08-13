@@ -123,7 +123,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 3. 内容要有疗愈/玄学/占星的专业感但不端着，像懂行的朋友在分享
 4. 可结合当下天象（水逆、满月、新月、行星换座等）增加时效性和共鸣
 
-`+d;else throw Error(`请先选择模板，或在灵感首页用「去仿写」带入选题方向`);try{let e=(await Ea(f,`你是爆款内容专家，擅长结构仿写。只返回纯JSON，不要任何额外文字。`)).replace(/```json\s*/g,``).replace(/```/g,``).trim(),t=JSON.parse(e);if(!t.items||!Array.isArray(t.items)||t.items.length===0)throw Error(`AI 返回数据格式异常：未包含 items 数组`);let i=t.items.map(e=>({id:Ta(),content_id:p,brief:p?void 0:n.trim().slice(0,200),title:e.title||`未命名`,body:e.body||``,style:r,created_at:new Date().toISOString(),starred:!1})),{error:a}=await z.from(`rewrites`).insert(i);if(a)throw Error(`保存失败: `+a.message);return{items:i}}catch(e){throw Error(`仿写生成失败：`+e.message+`
+`+d;else throw Error(`请先选择模板，或在灵感首页用「去仿写」带入选题方向`);try{let e=(await Ea(f,`你是爆款内容专家，擅长结构仿写。只返回纯JSON，不要任何额外文字。`)).replace(/```json\s*/g,``).replace(/```/g,``).trim(),t=JSON.parse(e);if(!t.items||!Array.isArray(t.items)||t.items.length===0)throw Error(`AI 返回数据格式异常：未包含 items 数组`);let i=t.items.map(e=>({id:Ta(),content_id:p,brief:p?void 0:n.trim().slice(0,200),title:e.title||`未命名`,body:e.body||``,style:r,created_at:new Date().toISOString(),starred:!1}));try{let{error:e}=await z.from(`rewrites`).insert(i);if(e)throw e}catch(e){let t=(e&&(e.message||e.code||``))+``;if(/brief|style|starred|schema cache/i.test(t)){let e=i.map(({brief:e,style:t,starred:n,...r})=>r),{error:t}=await z.from(`rewrites`).insert(e);if(t)throw Error(`保存失败: `+t.message)}else throw Error(`保存失败: `+t)}return{items:i}}catch(e){throw Error(`仿写生成失败：`+e.message+`
 
 排查步骤：
 1. 设置页检查 API Key 是否已配置
