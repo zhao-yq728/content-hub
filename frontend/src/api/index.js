@@ -380,6 +380,24 @@ export const contentAPI = {
 };
 
 // ============ Deconstruction API ============
+// 写库容错：若 deconstructions 表尚未加 gene_reasons 列（用户未跑 supabase_decon_reasons.sql），
+// 自动去掉该字段重试，避免整个拆解因缺列而失败（原因区会降级为空，但不影响拆解主流程）。
+async function upsertDeconstruction(record) {
+  try {
+    const { error } = await supabase.from('deconstructions').upsert(record);
+    if (error) throw error;
+  } catch (e) {
+    const msg = (e && (e.message || e.code || '')) + '';
+    if (/gene_reasons/i.test(msg)) {
+      const { gene_reasons, ...rest } = record;
+      const { error: e2 } = await supabase.from('deconstructions').upsert(rest);
+      if (e2) throw e2;
+    } else {
+      throw e;
+    }
+  }
+}
+
 export const deconstructAPI = {
   async list() {
     const { data: decons, error: e1 } = await supabase.from('deconstructions').select('*');
@@ -519,11 +537,13 @@ export const deconstructAPI = {
         golden_sentences: goldenSents,
         analyzed_at: new Date().toISOString(),
       };
-      await supabase.from('deconstructions').upsert(record);
+      await upsertDeconstruction(record);
       if (c.category === '未分类') {
         await contentAPI.update(contentId, { category: autoClassify(c.title + ' ' + (c.body || '')) });
       }
-      return await deconstructAPI.get(contentId);
+      const stored = await deconstructAPI.get(contentId);
+      const safeReasons = (stored.gene_reasons && Object.keys(stored.gene_reasons).length) ? stored.gene_reasons : record.gene_reasons;
+      return { ...stored, gene_reasons: safeReasons };
     } catch (e) {
       const fallback = {
         content_id: contentId,
@@ -548,7 +568,7 @@ export const deconstructAPI = {
         score: Math.round(78 + Math.random() * 12),
         analyzed_at: new Date().toISOString(),
       };
-      await supabase.from('deconstructions').upsert({
+      await upsertDeconstruction({
         content_id: contentId,
         title_pattern: fallback.title_formula,
         hook: fallback.hook_type,
