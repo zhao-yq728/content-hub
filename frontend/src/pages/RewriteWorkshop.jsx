@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { contentAPI, deconstructAPI, rewriteAPI, hotwordAPI } from '../api';
+import { CATEGORY_COLORS, classifyWord, groupHotwordsByCategory } from '../utils/hotwordCategories';
 
 const NOTE_TYPES = {
   review: { label: '种草测评', desc: '亲身体验+真实对比', color: '#ec4899', icon: '📝',
@@ -19,7 +20,7 @@ const NOTE_TYPES = {
     example: '这5个智商税千万别买！用过的人都说后悔' },
 };
 
-export default function RewriteWorkshop({ initialContentId, initialBrief }) {
+export default function RewriteWorkshop({ initialContentId, initialBrief, onNavigate }) {
   const [contents, setContents] = useState([]);
   const [hotwords, setHotwords] = useState([]);
   const [selectedContent, setSelectedContent] = useState(initialContentId || null);
@@ -34,9 +35,16 @@ export default function RewriteWorkshop({ initialContentId, initialBrief }) {
   const [showHelp, setShowHelp] = useState(!initialContentId && !initialBrief);
   const [sourceDecon, setSourceDecon] = useState(null);
 
+  const loadHotwords = (n = 50) => {
+    hotwordAPI.top(n).then(data => {
+      const classified = (data || []).map(w => ({ ...w, category: w.category || classifyWord(w.word) }));
+      setHotwords(classified);
+    }).catch(console.error);
+  };
+
   useEffect(() => {
     contentAPI.list().then(setContents).catch(console.error);
-    hotwordAPI.top(30).then(setHotwords).catch(console.error);
+    loadHotwords(50);
     rewriteAPI.list().then(setSavedList).catch(console.error);
   }, []);
 
@@ -242,27 +250,65 @@ export default function RewriteWorkshop({ initialContentId, initialBrief }) {
 
             {/* 热词 */}
             <div style={panelStyle}>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#7c3aed', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600 }}>3</span>
-                选择热词组合（可选）
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#7c3aed', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600 }}>3</span>
+                  选择热词组合（可选）
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={() => loadHotwords(50)} style={{
+                    padding: '4px 10px', borderRadius: 6, border: '1px solid #dee2e6',
+                    background: '#fff', color: '#495057', fontSize: 11, cursor: 'pointer',
+                  }}>🔄 刷新热词</button>
+                  <button onClick={() => onNavigate && onNavigate('hotwords')} style={{
+                    padding: '4px 10px', borderRadius: 6, border: '1px solid #d8b4fe',
+                    background: '#f3f0ff', color: '#7c3aed', fontSize: 11, cursor: 'pointer',
+                  }}>🔥 管理热词库</button>
+                </div>
               </div>
               <div style={{ fontSize: 12, color: '#868e96', marginBottom: 10 }}>
                 已选 {selectedHotwords.length} 个：{selectedHotwords.slice(0, 3).join(' + ') || '无'}
                 {selectedHotwords.length > 3 && ` 等 ${selectedHotwords.length} 个`}
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 120, overflowY: 'auto' }}>
-                {hotwords.map(hw => (
-                  <button key={hw.id || hw.word} onClick={() => toggleHotword(hw.word)} style={{
-                    padding: '4px 12px', borderRadius: 20,
-                    border: '1px solid #dee2e6', fontSize: 12,
-                    backgroundColor: selectedHotwords.includes(hw.word) ? '#7c3aed' : '#fff',
-                    color: selectedHotwords.includes(hw.word) ? '#fff' : '#495057',
-                    cursor: 'pointer',
-                  }}>
-                    {hw.word} {hw.frequency ? `(${hw.frequency})` : ''}
-                  </button>
-                ))}
-              </div>
+              {(() => {
+                const { grouped, sortedCategories } = groupHotwordsByCategory(hotwords);
+                if (sortedCategories.length === 0) {
+                  return (
+                    <div style={{ padding: '20px 0', textAlign: 'center', color: '#868e96', fontSize: 13 }}>
+                      暂无热词，点击「刷新热词」或去「热词库」添加
+                    </div>
+                  );
+                }
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 220, overflowY: 'auto', paddingRight: 4 }}>
+                    {sortedCategories.map(cat => (
+                      <div key={cat} style={{
+                        padding: 10, borderRadius: 8, backgroundColor: '#fff', border: '1px solid #e9ecef',
+                        borderLeft: '3px solid ' + (CATEGORY_COLORS[cat] || '#94a3b8'),
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: CATEGORY_COLORS[cat] || '#475569' }}>🏷 {cat}</span>
+                          <span style={{ fontSize: 11, color: '#868e96' }}>({grouped[cat].length})</span>
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {grouped[cat].map(hw => (
+                            <button key={hw.id || hw.word} onClick={() => toggleHotword(hw.word)} style={{
+                              padding: '4px 10px', borderRadius: 20,
+                              border: '1px solid ' + (selectedHotwords.includes(hw.word) ? CATEGORY_COLORS[cat] || '#7c3aed' : '#dee2e6'),
+                              fontSize: 12,
+                              backgroundColor: selectedHotwords.includes(hw.word) ? (CATEGORY_COLORS[cat] || '#7c3aed') : '#fff',
+                              color: selectedHotwords.includes(hw.word) ? '#fff' : '#495057',
+                              cursor: 'pointer',
+                            }} title={'频次: ' + (hw.count || hw.frequency || 0)}>
+                              {hw.word}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* 生成按钮 */}

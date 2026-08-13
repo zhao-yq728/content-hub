@@ -62,7 +62,7 @@ export default function App() {
           />
         );
       case 'rewrite':
-        return <RewriteWorkshop initialContentId={rewriteFromId} initialBrief={rewriteBrief} />;
+        return <RewriteWorkshop initialContentId={rewriteFromId} initialBrief={rewriteBrief} onNavigate={handleNavigate} />;
       case 'categories':
         return <Categories onCategoryClick={handleCategoryClick} />;
       case 'hotwords':
