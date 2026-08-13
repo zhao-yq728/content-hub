@@ -719,8 +719,22 @@ export const rewriteAPI = {
         created_at: new Date().toISOString(),
         starred: false,
       }));
-      const { error } = await supabase.from('rewrites').insert(items);
-      if (error) throw new Error('保存失败: ' + error.message);
+      // 写库容错：若 rewrites 表尚未加 brief/style/starred 等列，自动降级保存，避免整条仿写崩溃
+      let insertError = null;
+      try {
+        const { error } = await supabase.from('rewrites').insert(items);
+        if (error) throw error;
+      } catch (e) {
+        const msg = (e && (e.message || e.code || '')) + '';
+        const missingCol = /brief|style|starred|schema cache/i.test(msg);
+        if (missingCol) {
+          const fallbackItems = items.map(({ brief, style, starred, ...rest }) => rest);
+          const { error: e2 } = await supabase.from('rewrites').insert(fallbackItems);
+          if (e2) throw new Error('保存失败: ' + e2.message);
+        } else {
+          throw new Error('保存失败: ' + msg);
+        }
+      }
       return { items };
     } catch (e) {
       // 把真实错误抛出给前端，不静默吞掉
