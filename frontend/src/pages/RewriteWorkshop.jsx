@@ -22,6 +22,7 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
   const [combinations, setCombinations] = useState([]);
   const [comboLoading, setComboLoading] = useState(false);
   const [showCombo, setShowCombo] = useState(false);
+  const [showComboDropdown, setShowComboDropdown] = useState(false);
 
   // 模板输入模式：template（选已拆解） / text（粘贴文案） / image（粘贴图片）
   const [templateMode, setTemplateMode] = useState('template');
@@ -100,15 +101,23 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
     setCollapsedCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
   };
 
-  // 联想组合：输入一个词，AI 返回 5 个维度的组合词
-  const handleCombo = async () => {
-    const w = comboWord.trim();
-    if (!w) return;
+  // 联想组合：智能判断词源 - 输入框 > 已选第一个词 > 模板标题
+  const handleCombo = async (overrideWord) => {
+    const w = (overrideWord || comboWord || '').trim()
+      || selectedHotwords[0]
+      || selectedMeta?.title?.slice(0, 12)
+      || '';
+    if (!w) {
+      alert('请先选一个模板/已选词，或在输入框输入一个词');
+      return;
+    }
+    setComboWord(w);
     setComboLoading(true);
     try {
       const data = await hotwordAPI.combinations(w);
       setCombinations(data || []);
       setShowCombo(true);
+      setShowComboDropdown(false);
     } catch (e) {
       alert('联想失败: ' + e.message);
     }
@@ -385,10 +394,6 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
                     padding: '4px 10px', borderRadius: 6, border: '1px solid #dee2e6',
                     background: '#fff', color: '#495057', fontSize: 11, cursor: 'pointer',
                   }}>🔄 刷新热词</button>
-                  <button onClick={() => onNavigate && onNavigate('hotwords')} style={{
-                    padding: '4px 10px', borderRadius: 6, border: '1px solid #d8b4fe',
-                    background: '#f3f0ff', color: '#7c3aed', fontSize: 11, cursor: 'pointer',
-                  }}>🔥 管理热词库</button>
                 </div>
               </div>
 
@@ -399,12 +404,12 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
                     {selectedHotwords.map(word => {
                       const cat = classifyWord(word);
                       return (
-                        <span key={word} style={{
-                          padding: '4px 10px', borderRadius: 20, fontSize: 12,
+                        <span key={word} onClick={() => setComboWord(word)} title="点击填入联想输入框" style={{
+                          padding: '4px 10px', borderRadius: 20, fontSize: 12, cursor: 'pointer',
                           background: CATEGORY_COLORS[cat] || '#7c3aed', color: '#fff', display: 'flex', alignItems: 'center', gap: 4,
                         }}>
                           {word}
-                          <button onClick={() => removeSelectedHotword(word)} style={{
+                          <button onClick={(e) => { e.stopPropagation(); removeSelectedHotword(word); }} style={{
                             width: 16, height: 16, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.3)',
                             color: '#fff', fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                           }}>×</button>
@@ -429,20 +434,66 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
                 </div>
 
                 {/* 联想组合：5 维词组（任务/场景/心情/物品/感受） */}
-                <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
-                  <input
-                    type="text"
-                    value={comboWord}
-                    onChange={e => setComboWord(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCombo(); } }}
-                    placeholder="🔮 联想组合：输入词，自动生成 5 维词组（任务/场景/心情/物品/感受）"
-                    style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: '1px solid #d8b4fe', fontSize: 13, outline: 'none', background: '#faf5ff' }}
-                  />
-                  <button onClick={handleCombo} disabled={comboLoading || !comboWord.trim()} style={{
-                    padding: '8px 14px', borderRadius: 8, border: 'none',
-                    background: comboLoading ? '#9ca3af' : '#7c3aed', color: '#fff',
-                    fontSize: 12, cursor: comboLoading ? 'not-allowed' : 'pointer', fontWeight: 500,
-                  }}>{comboLoading ? '...' : '联想'}</button>
+                <div style={{ marginTop: 10, position: 'relative' }}>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <div style={{ flex: 1, position: 'relative' }}>
+                      <input
+                        type="text"
+                        value={comboWord}
+                        onChange={e => { setComboWord(e.target.value); setShowComboDropdown(true); }}
+                        onFocus={() => setShowComboDropdown(true)}
+                        onBlur={() => setTimeout(() => setShowComboDropdown(false), 200)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCombo(); } }}
+                        placeholder="🔮 联想组合：点上面已选词 / 点分类里的词 / 自己输入 → 自动生成 5 维词组"
+                        style={{ width: '100%', padding: '8px 32px 8px 12px', borderRadius: 8, border: '1px solid #d8b4fe', fontSize: 13, outline: 'none', background: '#faf5ff', boxSizing: 'border-box' }}
+                      />
+                      <button onClick={() => setShowComboDropdown(!showComboDropdown)} style={{
+                        position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)',
+                        width: 24, height: 24, borderRadius: 4, border: 'none', background: 'transparent',
+                        color: '#7c3aed', fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }} title="展开候选词">▼</button>
+                    </div>
+                    <button onClick={() => handleCombo()} disabled={comboLoading} style={{
+                      padding: '8px 14px', borderRadius: 8, border: 'none',
+                      background: comboLoading ? '#9ca3af' : '#7c3aed', color: '#fff',
+                      fontSize: 12, cursor: comboLoading ? 'not-allowed' : 'pointer', fontWeight: 500,
+                    }}>{comboLoading ? '...' : '🔮 联想'}</button>
+                  </div>
+                  {showComboDropdown && (
+                    <div style={{
+                      position: 'absolute', top: '100%', left: 0, right: 62, marginTop: 4,
+                      background: '#fff', border: '1px solid #d8b4fe', borderRadius: 8,
+                      boxShadow: '0 4px 12px rgba(124,58,237,0.15)', maxHeight: 220, overflowY: 'auto', zIndex: 10,
+                    }}>
+                      {selectedHotwords.length > 0 && (
+                        <div style={{ padding: 8, borderBottom: '1px solid #f1f3f5' }}>
+                          <div style={{ fontSize: 11, color: '#7c3aed', fontWeight: 600, marginBottom: 6 }}>⭐ 已选词（点击填入）</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                            {selectedHotwords.map(w => (
+                              <span key={w} onMouseDown={() => { setComboWord(w); setShowComboDropdown(false); }} style={{
+                                padding: '3px 10px', borderRadius: 12, background: '#f3f0ff', color: '#7c3aed',
+                                fontSize: 12, cursor: 'pointer', border: '1px solid #d8b4fe',
+                              }}>{w}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div style={{ padding: 8 }}>
+                        <div style={{ fontSize: 11, color: '#868e96', fontWeight: 600, marginBottom: 6 }}>
+                          💡 推荐词（点击填入）
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {hotwords.slice(0, 60).map(hw => (
+                            <span key={hw.word} onMouseDown={() => { setComboWord(hw.word); setShowComboDropdown(false); }} style={{
+                              padding: '2px 8px', borderRadius: 10, background: '#f8f9fa', color: '#495057',
+                              fontSize: 11, cursor: 'pointer', border: '1px solid #e9ecef',
+                            }}>{hw.word}</span>
+                          ))}
+                          {hotwords.length === 0 && <span style={{ fontSize: 11, color: '#868e96' }}>暂无热词</span>}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 {showCombo && combinations.length > 0 && (
                   <div style={{ marginTop: 8, padding: 10, background: '#faf5ff', borderRadius: 8, border: '1px solid #d8b4fe' }}>
