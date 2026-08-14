@@ -15,8 +15,13 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
   const [results, setResults] = useState([]);
   const [savedList, setSavedList] = useState([]);
   const [tab, setTab] = useState('generate');
-  const [showHelp, setShowHelp] = useState(!initialContentId && !initialBrief);
   const [sourceDecon, setSourceDecon] = useState(null);
+
+  // 联想组合
+  const [comboWord, setComboWord] = useState('');
+  const [combinations, setCombinations] = useState([]);
+  const [comboLoading, setComboLoading] = useState(false);
+  const [showCombo, setShowCombo] = useState(false);
 
   // 模板输入模式：template（选已拆解） / text（粘贴文案） / image（粘贴图片）
   const [templateMode, setTemplateMode] = useState('template');
@@ -44,7 +49,6 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
   useEffect(() => {
     if (initialContentId) {
       setSelectedContent(initialContentId);
-      setShowHelp(false);
       setTab('generate');
       // 加载对应的拆解信息供展示
       deconstructAPI.get(initialContentId).then(d => {
@@ -57,7 +61,6 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
     if (initialBrief) {
       setFreeBrief(initialBrief);
       setSelectedContent(null);
-      setShowHelp(false);
       setTab('generate');
     }
   }, [initialBrief]);
@@ -95,6 +98,29 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
 
   const toggleCollapse = (cat) => {
     setCollapsedCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
+  };
+
+  // 联想组合：输入一个词，AI 返回 5 个维度的组合词
+  const handleCombo = async () => {
+    const w = comboWord.trim();
+    if (!w) return;
+    setComboLoading(true);
+    try {
+      const data = await hotwordAPI.combinations(w);
+      setCombinations(data || []);
+      setShowCombo(true);
+    } catch (e) {
+      alert('联想失败: ' + e.message);
+    }
+    setComboLoading(false);
+  };
+
+  const addComboToSelected = (combo) => {
+    // 把组合里的每个词自动选中
+    const words = Object.values(combo.parts || {}).filter(Boolean);
+    words.forEach(w => {
+      if (!selectedHotwords.includes(w)) setSelectedHotwords(prev => [...prev, w]);
+    });
   };
 
   // 处理粘贴事件（支持文案文字 + 图片）
@@ -177,51 +203,6 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
   return (
     <div>
       <h2 style={{ fontSize: 20, fontWeight: 600, color: '#212529', marginBottom: 20 }}>AI 仿写工坊</h2>
-
-      {/* 工作流说明 - 顶部醒目标识 */}
-      <div style={{
-        padding: 14, marginBottom: 20, borderRadius: 10,
-        background: 'linear-gradient(135deg, #ede9fe 0%, #fce7f3 100%)',
-        border: '1px solid #d8b4fe', display: 'flex', alignItems: 'center', gap: 12,
-      }}>
-        <div style={{ fontSize: 24 }}>✨</div>
-        <div style={{ flex: 1, fontSize: 13, color: '#6b21a8' }}>
-          <strong>使用流程：</strong>
-          素材库拆解内容 → 拆解报告点「立即仿写」→ 选择风格+热词 → 生成新内容 → 创作库中查看
-        </div>
-        <button onClick={() => setShowHelp(!showHelp)} style={{
-          padding: '4px 10px', fontSize: 12, background: '#fff', color: '#7c3aed',
-          border: '1px solid #d8b4fe', borderRadius: 6, cursor: 'pointer',
-        }}>
-          {showHelp ? '隐藏' : '展开'}教程
-        </button>
-      </div>
-
-      {showHelp && (
-        <div style={{
-          padding: 18, marginBottom: 20, borderRadius: 10,
-          backgroundColor: '#fff', border: '1px solid #e9ecef',
-        }}>
-          <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, color: '#212529' }}>📖 完整使用教程</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
-            {[
-              { step: '1', title: '在素材库拆解内容', desc: '对一条内容点击「🔬 拆解」按钮，AI 会分析出标题公式/开篇钩子/情绪曲线等爆款基因' },
-              { step: '2', title: '进入拆解报告', desc: '拆解完成后会自动跳转到拆解中心，可以查看完整的爆款基因分析' },
-              { step: '3', title: '点击「立即仿写」', desc: '拆解报告页右上角的紫色按钮，会直接带这个模板来到仿写工坊' },
-              { step: '4', title: '选风格+热词', desc: '选择内容类型，可选点击热词作为必须融入的关键词' },
-              { step: '5', title: '生成并保存', desc: '点击「开始生成」，AI 会基于这个模板生成 1-5 条新内容，自动存到创作库' },
-            ].map(s => (
-              <div key={s.step} style={{ padding: 12, borderRadius: 8, backgroundColor: '#f8f9fa' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                  <div style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#7c3aed', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600 }}>{s.step}</div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#212529' }}>{s.title}</div>
-                </div>
-                <div style={{ fontSize: 12, color: '#495057', lineHeight: 1.6 }}>{s.desc}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderBottom: '2px solid #e9ecef' }}>
@@ -446,6 +427,47 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
                     fontSize: 12, cursor: 'pointer', fontWeight: 500,
                   }}>添加</button>
                 </div>
+
+                {/* 联想组合：5 维词组（任务/场景/心情/物品/感受） */}
+                <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+                  <input
+                    type="text"
+                    value={comboWord}
+                    onChange={e => setComboWord(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCombo(); } }}
+                    placeholder="🔮 联想组合：输入词，自动生成 5 维词组（任务/场景/心情/物品/感受）"
+                    style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: '1px solid #d8b4fe', fontSize: 13, outline: 'none', background: '#faf5ff' }}
+                  />
+                  <button onClick={handleCombo} disabled={comboLoading || !comboWord.trim()} style={{
+                    padding: '8px 14px', borderRadius: 8, border: 'none',
+                    background: comboLoading ? '#9ca3af' : '#7c3aed', color: '#fff',
+                    fontSize: 12, cursor: comboLoading ? 'not-allowed' : 'pointer', fontWeight: 500,
+                  }}>{comboLoading ? '...' : '联想'}</button>
+                </div>
+                {showCombo && combinations.length > 0 && (
+                  <div style={{ marginTop: 8, padding: 10, background: '#faf5ff', borderRadius: 8, border: '1px solid #d8b4fe' }}>
+                    <div style={{ fontSize: 12, color: '#7c3aed', fontWeight: 600, marginBottom: 8 }}>💡 组合灵感（点击加入已选）</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {combinations.map((c, i) => (
+                        <div key={i} onClick={() => addComboToSelected(c)} style={{
+                          padding: 8, borderRadius: 6, background: '#fff', border: '1px solid #e9ecef',
+                          cursor: 'pointer', fontSize: 12,
+                        }}>
+                          <div style={{ color: '#7c3aed', fontWeight: 600, marginBottom: 4 }}>{c.word}</div>
+                          {c.parts && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                              {Object.entries(c.parts).map(([dim, w]) => (
+                                <span key={dim} style={{ padding: '1px 8px', borderRadius: 8, backgroundColor: '#f3f0ff', color: '#495057', border: '1px solid #d8b4fe', fontSize: 11 }}>
+                                  {dim}: {w}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {(() => {
@@ -504,12 +526,10 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
                                     <span onClick={() => toggleHotword(hw.word)} style={{ flex: 1 }}>{hw.word}</span>
                                     <button onClick={(e) => {
                                       e.stopPropagation();
-                                      if (window.confirm('确认从热词库删除「' + hw.word + '」？')) {
-                                        hotwordAPI.deleteWord(hw.word).then(() => {
-                                          setHotwords(prev => prev.filter(h => h.word !== hw.word));
-                                          setSelectedHotwords(prev => prev.filter(w => w !== hw.word));
-                                        }).catch(err => alert('删除失败: ' + err.message));
-                                      }
+                                      hotwordAPI.deleteWord(hw.word).then(() => {
+                                        setHotwords(prev => prev.filter(h => h.word !== hw.word));
+                                        setSelectedHotwords(prev => prev.filter(w => w !== hw.word));
+                                      }).catch(err => alert('删除失败: ' + err.message));
                                     }} style={{
                                       width: 18, height: 18, borderRadius: 9, border: 'none',
                                       background: isSelected ? 'rgba(255,255,255,0.3)' : '#f1f3f5',

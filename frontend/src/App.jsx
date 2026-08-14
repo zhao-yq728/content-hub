@@ -6,7 +6,6 @@ import ContentLibrary from './pages/ContentLibrary';
 import DeconstructionView from './pages/DeconstructionView';
 import RewriteWorkshop from './pages/RewriteWorkshop';
 import Categories from './pages/Categories';
-import HotWords from './pages/HotWords';
 import Settings from './pages/Settings';
 import Skills from './pages/Skills';
 import MyCollection from './pages/MyCollection';
@@ -65,8 +64,6 @@ export default function App() {
         return <RewriteWorkshop initialContentId={rewriteFromId} initialBrief={rewriteBrief} onNavigate={handleNavigate} />;
       case 'categories':
         return <Categories onCategoryClick={handleCategoryClick} />;
-      case 'hotwords':
-        return <HotWords onNavigate={handleNavigate} />;
       case 'skills':
         return <Skills onNavigate={handleNavigate} />;
       case 'collection':

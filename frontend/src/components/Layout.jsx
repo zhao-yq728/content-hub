@@ -9,7 +9,6 @@ const navItems = [
   { key: 'deconstruct', label: '拆解中心', icon: '🔬' },
   { key: 'rewrite', label: '仿写工坊', icon: '✍️' },
   { key: 'categories', label: '分类管理', icon: '📂' },
-  { key: 'hotwords', label: '热词库', icon: '🔥' },
   { key: 'settings', label: '设置', icon: '⚙️' },
 ];
 
