@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { contentAPI, deconstructAPI, rewriteAPI, hotwordAPI } from '../api';
-import { CATEGORY_COLORS, classifyWord, groupHotwordsByCategory } from '../utils/hotwordCategories';
+import { CATEGORY_COLORS, classifyWord, groupHotwordsByCategory, mergeWithDefaultHotwords } from '../utils/hotwordCategories';
 
 const NOTE_TYPES = {
   review: { label: '种草测评', desc: '亲身体验+真实对比', color: '#ec4899', icon: '📝',
@@ -36,10 +36,12 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
   const [showHelp, setShowHelp] = useState(!initialContentId && !initialBrief);
   const [sourceDecon, setSourceDecon] = useState(null);
 
-  const loadHotwords = (n = 300) => {
+  const loadHotwords = (n = 500) => {
     hotwordAPI.top(n).then(data => {
       const classified = (data || []).map(w => ({ ...w, category: w.category || classifyWord(w.word) }));
-      setHotwords(classified);
+      // 用自己素材热词 + 爆款默认热词库补齐，确保每个分类都充足
+      const merged = mergeWithDefaultHotwords(classified, 30);
+      setHotwords(merged);
       setHotwordOffset({}); // 重置偏移
     }).catch(console.error);
   };
@@ -50,7 +52,7 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
 
   useEffect(() => {
     contentAPI.list().then(setContents).catch(console.error);
-    loadHotwords(50);
+    loadHotwords();
     rewriteAPI.list().then(setSavedList).catch(console.error);
   }, []);
 
@@ -327,7 +329,7 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
                                 backgroundColor: selectedHotwords.includes(hw.word) ? (CATEGORY_COLORS[cat] || '#7c3aed') : '#fff',
                                 color: selectedHotwords.includes(hw.word) ? '#fff' : '#495057',
                                 cursor: 'pointer',
-                              }} title={'频次: ' + (hw.count || hw.frequency || 0)}>
+                              }} title={(hw.isDefault ? '系统默认热词 · ' : '素材热词 · ') + '频次: ' + (hw.count || hw.frequency || 0)}>
                                 {hw.word}
                               </button>
                             ))}
