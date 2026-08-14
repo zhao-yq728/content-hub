@@ -725,23 +725,8 @@ export const rewriteAPI = {
   },
 
   async run(data) {
-    const { content_id, brief, source_text, style = 'default', hotwords = '', count = 3 } = data;
+    const { content_id, brief, source_text, hotwords = '', count = 3 } = data;
     const n = Math.min(Math.max(parseInt(count) || 3, 1), 5);
-
-    const styleMap = {
-      review: '种草测评型：「亲身体验+真实对比」，结构=痛点共鸣→产品引入→分维度对比→推荐结论。像买回家用了两周在群里跟闺蜜分享的感觉',
-      tutorial: '干货教程型：「步骤清晰+可复制」，结构=问题场景→解决方法→分步操作→效果展示。像给朋友发微信教她做一件事，每一步都具体可执行',
-      story: '故事叙事型：「场景+情绪+转折」，结构=具体场景→情绪冲突→转折事件→感悟/行动。像讲一件真实发生在你身边的事',
-      collection: '合集盘点型：「筛选标准+多维对比」，结构=需求定义→筛选标准→分项推荐→总结对比。每个推荐项有具体来源和使用感受',
-      opinion: '观点评论型：「态度+洞察+争议」，结构=现象引入→核心观点→论据论证→引发讨论。有立场但不说教，像朋友间认真聊天',
-      emotional: '情感共鸣型：「共情+陪伴+治愈」，结构=情绪场景→共情表达→温柔陪伴→正向收尾。像在深夜陪人说话，允许句子长短不齐',
-      avoid: '避雷拔草型：「踩坑经历+真相揭露」，结构=期待vs现实→问题罗列→替代方案→省钱建议。吐槽真实不夸张，建议真诚',
-      vlog: 'Vlog叙事型：「时间线+现场感」，结构=开始状态→转折事件→解决方案→结果+感受。像写日记一样有具体时间地点细节',
-      default: '自然真人感：像朋友聊天一样，有语气词、有停顿、有真实的小犹豫，不要完美排比',
-      healing: '治愈系：温柔、共情、像在深夜陪人说话，允许句子长短不齐，带一点呼吸感',
-      sharp: '犀利系：观点直接、有态度、敢下判断，像闺蜜吐槽或过来人拍醒你',
-      dry: '干货系：结构清晰但不像说明书，加入"我踩过的坑""说人话就是"等口语表达',
-    };
 
     const hotwordText = Array.isArray(hotwords) ? hotwords.join('、') : (hotwords || '');
     const hotwordInject = hotwordText ? '\n需要自然融入的热词（不要生硬堆砌）：' + hotwordText : '';
@@ -753,7 +738,7 @@ export const rewriteAPI = {
       exampleItems += '{"title":"标题' + i + '","body":"正文' + i + '","angle":"角度' + String.fromCharCode(64 + i) + '"}';
     }
 
-    // 公共写作规则（两种模式共用）
+    // 公共写作规则（三种模式共用）
     const writingRules =
       '【去 AI 味写作要求】\n' +
       '1. 标题要像真人刷到会点进去的样子，可以用emoji、数字、问句、感叹，但不要全是套路\n' +
@@ -774,6 +759,23 @@ export const rewriteAPI = {
       '用JSON格式返回（不要其他文字，不要 ```json 包装），必须输出完整可解析的JSON，不要截断：\n' +
       '{"items":[' + exampleItems + ']}';
 
+    // 爆款复刻创作（trend-catcher）6 步流程 - 内嵌的 system prompt
+    const trendCatcherFlow =
+      '【爆款复刻创作技能 6 步流程 - 必须严格执行】\n' +
+      '\n' +
+      '步骤 1 【账号风格定位】: 你的账号是「疗愈/玄学/占星」垂类，细分风格「故事叙事+情感共鸣」，目标受众「年轻女性/30+疗愈探索者/玄学兴趣人群」，语气调性「温柔治愈、共情陪伴、像懂行的朋友在分享」，字数300-800字，平台小红书/抖音/公众号。所有产出必须贴合此定位，**严禁跨领域跑偏**。\n' +
+      '\n' +
+      '步骤 2 【拆解爆款底层逻辑】: 分析输入素材/选题/参考文案的标题句式、开篇钩子、内容结构、行文节奏、核心卖点、互动设计、爆火原因。只借鉴框架/节奏/选题角度/情绪引导/排版话术，**不直接复制原文词句**。\n' +
+      '\n' +
+      '步骤 3 【生成专属创作提示词】: 基于风格卡+拆解结果，自定本次创作的【标题公式】【内容结构】【行文要求】【互动设计】【避坑清单】。\n' +
+      '\n' +
+      '步骤 4 【复刻改写 - 三条红线】: ❌严禁直接复制或微调原标题文字 / 大段复制原文 / 句式结构照搬 / 一字不差洗稿。✅可借鉴标题结构/句式公式、行文节奏、段落框架、语气风格、互动逻辑。必须做视角切换/案例置换/结构微调/表述重塑/增量加值，整体改写度 ≥ 60%。\n' +
+      '\n' +
+      '步骤 5 【原创度自检】: 全文是否连续15字与原文相同？段落结构是否一一对应？核心案例是否全部替换？是否有直接搬运的配图/数据？整体阅读是否明显是"两篇不同文章"？是否新增了原爆款没有的信息/观点/角度？\n' +
+      '\n' +
+      '步骤 6 【合规风控审核】: 检查①重复率②平台限流风险（标题党/诱导互动/硬广/低俗/虚假信息）③同质化④文风匹配度⑤阅读体验（段落≤5行、语句通顺、逻辑连贯）⑥违规词/敏感内容（《广告法》禁用词"最好/第一/唯一/国家级"等）。\n' +
+      '\n';
+
     let prompt;
     let saveContentId = content_id;
 
@@ -786,11 +788,11 @@ export const rewriteAPI = {
       ).join('\n');
 
       prompt =
-        '你是一个真人博主，正在写一条要发在小红书/抖音的内容。请基于下面这份【爆款拆解】，生成 ' + n + ' 条**同领域、不同角度**的二次创作。\n' +
-        '【风格要求】' + (styleMap[style] || styleMap.default) + hotwordInject + '\n\n' +
-        '【原始标题】' + (c?.title || '') + '\n' +
-        '【原始正文（不要照抄，但要保留核心场景和人物设定）】\n' + ((c?.body || '').slice(0, 1500)) + '\n\n' +
-        '【爆款拆解 - 内在基因】\n' +
+        trendCatcherFlow + '\n' +
+        '【输入素材 - 爆款拆解】\n' +
+        '标题：' + (c?.title || '') + '\n' +
+        '正文：\n' + ((c?.body || '').slice(0, 1500)) + '\n\n' +
+        '【拆解出的爆款基因】\n' +
         '标题公式：' + (decon?.title_formula || '') + '\n' +
         '开篇钩子：' + (decon?.hook_type || '') + '\n' +
         '情绪曲线：' + (decon?.emotion_curve || '') + '\n' +
@@ -799,23 +801,25 @@ export const rewriteAPI = {
         '正文结构：' + (decon?.content_structure || '') + '\n' +
         (geneText ? '可复用爆款基因：\n' + geneText + '\n' : '') +
         '【金句摘录（仅作风格参考，词句不照搬）】\n' + ((decon?.golden_sentences || []).slice(0, 3).join('\n')) + '\n\n' +
-        '【核心要求 - 严格遵守】\n' +
-        '1. 【同领域】主题必须和原文一致，原文讲什么就讲什么 — 讲美妆就讲美妆，讲穿搭就讲穿搭，讲美食就讲美食。**严禁换领域**\n' +
+        '【任务】基于上述爆款拆解，按 6 步流程生成 ' + n + ' 条**同领域、不同角度**的二次创作。' +
+        hotwordInject + '\n\n' +
+        '【核心要求】\n' +
+        '1. 【同领域】主题必须和原文一致 — 讲美妆就讲美妆，讲穿搭就讲穿搭，讲疗愈就讲疗愈。**严禁换领域**\n' +
         '2. 【同受众】目标人群保持一致（小白/新手/学生/上班族等定位不变）\n' +
         '3. 【同结构】复用原文的【标题公式+开篇钩子+情绪节奏+互动引导】，不要换结构\n' +
         '4. 【不同角度】可以换的是：具体场景、人设、切入点、产品类型、情绪细节、出场顺序\n' +
         '5. 原文讲"10分钟早八淡妆" → 你可以写"10分钟约会妆/通勤妆/面试妆/健身房妆容"，**都是美妆不同场景**\n' +
         '6. 原文讲"5套法式穿搭" → 你可以写"5套学院风/通勤风/约会风穿搭"，**都是穿搭不同风格**\n' +
-        '7. 原文讲"省钱存钱" → 你可以写"存钱工具/存钱挑战/副业存钱"，**都是理财不同方法**\n' +
-        '8. 原文讲的具体细节（品牌、地址、价格、地点、人物）可以替换，但【行业/品类/痛点】必须保留\n\n' +
+        '7. 原文讲的具体细节（品牌、地址、价格、地点、人物）可以替换，但【行业/品类/痛点】必须保留\n\n' +
         writingRules;
     } else if (brief && brief.trim()) {
       // ---------- 自由选题模式（灵感首页「去仿写」入口） ----------
       saveContentId = null;
       prompt =
-        '你是一个真人博主（疗愈/玄学/占星内容方向），正在写一条要发在小红书/抖音的内容。下面是我已经定好的【选题方向】，请围绕它生成 ' + n + ' 条**不同角度**的成品内容。\n' +
-        '【风格要求】' + (styleMap[style] || styleMap.default) + hotwordInject + '\n\n' +
-        '【选题方向（已定，主题保持一致，可从不同切入角度展开）】\n' + brief.trim() + '\n\n' +
+        trendCatcherFlow + '\n' +
+        '【输入选题方向（已定，主题保持一致，可从不同切入角度展开）】\n' + brief.trim() + '\n\n' +
+        '【任务】基于以上选题，按 6 步流程生成 ' + n + ' 条**不同角度**的成品内容。' +
+        hotwordInject + '\n\n' +
         '【核心要求】\n' +
         '1. 主题必须围绕上面的选题方向，不要跑题\n' +
         '2. 每条内容角度要有差异（不同人群/不同场景/不同情绪点/不同争议点）\n' +
@@ -826,11 +830,12 @@ export const rewriteAPI = {
       // ---------- 粘贴文案/图片识别后的仿写模式 ----------
       saveContentId = null;
       prompt =
-        '你是一个真人博主，正在写一条要发在小红书/抖音的内容。下面是我从别处看到的一段【参考文案】，请学习它的风格、结构和语气，生成 ' + n + ' 条**同领域、不同角度**的二次创作。\n' +
-        '【风格要求】' + (styleMap[style] || styleMap.default) + hotwordInject + '\n\n' +
-        '【参考文案（不要照抄，但要保留核心场景和人物设定）】\n' + source_text.trim().slice(0, 2000) + '\n\n' +
-        '【核心要求 - 严格遵守】\n' +
-        '1. 【同领域】主题必须和参考文案一致，原文讲什么就讲什么 — 讲美妆就讲美妆，讲穿搭就讲穿搭，讲情感就讲情感。**严禁换领域**\n' +
+        trendCatcherFlow + '\n' +
+        '【输入参考文案（不要照抄，但要保留核心场景和人物设定）】\n' + source_text.trim().slice(0, 2000) + '\n\n' +
+        '【任务】按 6 步流程拆解上述文案后，生成 ' + n + ' 条**同领域、不同角度**的二次创作。' +
+        hotwordInject + '\n\n' +
+        '【核心要求】\n' +
+        '1. 【同领域】主题必须和参考文案一致 — 讲美妆就讲美妆，讲穿搭就讲穿搭，讲情感就讲情感。**严禁换领域**\n' +
         '2. 【同受众】目标人群保持一致（小白/新手/学生/上班族等定位不变）\n' +
         '3. 【复用结构】学习参考文案的标题节奏、开篇钩子、情绪推进和结尾方式，不要换结构\n' +
         '4. 【不同角度】可以换的是：具体场景、人设、切入点、产品类型、情绪细节、出场顺序\n' +
@@ -841,7 +846,7 @@ export const rewriteAPI = {
     }
 
     try {
-      const result = await callAI(prompt, '你是爆款内容专家，擅长结构仿写。只返回纯JSON，不要任何额外文字。必须输出完整、可解析的JSON，不要截断。');
+      const result = await callAI(prompt, '你是「爆款复刻创作」技能 - 资深自媒体内容运营 + 爆款文案分析师。按 6 步流程产出原创内容（账号风格定位→拆解→专属提示词→复刻改写→原创度自检→合规审核）。只返回纯JSON，不要任何额外文字。必须输出完整、可解析的JSON，不要截断。');
       const parsed = safeParseRewriteJson(result);
       if (!parsed.items || !Array.isArray(parsed.items) || parsed.items.length === 0) {
         throw new Error('AI 返回数据格式异常：未包含 items 数组');
@@ -849,10 +854,10 @@ export const rewriteAPI = {
       const items = parsed.items.map((item) => ({
         id: uid(),
         content_id: saveContentId,
-        brief: saveContentId ? undefined : brief.trim().slice(0, 200),
+        brief: saveContentId ? undefined : (brief || source_text || '').trim().slice(0, 200),
         title: item.title || '未命名',
         body: item.body || '',
-        style,
+        style: 'trend_catcher',
         created_at: new Date().toISOString(),
         starred: false,
       }));
@@ -1065,6 +1070,14 @@ export const hotwordAPI = {
     const { error } = await supabase.from('hotwords').upsert(items);
     if (error) throw new Error(error.message);
     return { count: items.length };
+  },
+
+  // 删除指定热词（数据库）
+  async deleteWord(word) {
+    if (!word || !word.trim()) return { ok: false };
+    const { error } = await supabase.from('hotwords').delete().eq('word', word.trim());
+    if (error) throw new Error(error.message);
+    return { ok: true };
   },
 
   // 重新分类所有热词

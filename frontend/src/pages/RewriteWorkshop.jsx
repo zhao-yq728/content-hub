@@ -2,44 +2,24 @@ import { useState, useEffect, useRef } from 'react';
 import { contentAPI, deconstructAPI, rewriteAPI, hotwordAPI, callAIVision } from '../api';
 import { CATEGORY_COLORS, classifyWord, groupHotwordsByCategory, mergeWithDefaultHotwords } from '../utils/hotwordCategories';
 
-// Content Creator 专家内置内容类型体系：保留小红书实战性，融入专业内容策略框架
-const NOTE_TYPES = {
-  review: { label: '种草测评', desc: '亲身体验 + 真实对比', color: '#ec4899', icon: '📝',
-    formula: '痛点共鸣 → 产品引入 → 分维度对比 → 推荐结论',
-    example: '烂脸期用了1个月，这个精华到底有没有用？' },
-  tutorial: { label: '干货教程', desc: '步骤清晰 + 可复制', color: '#3b82f6', icon: '📖',
-    formula: '问题场景 → 解决方法 → 分步操作 → 效果展示',
-    example: '3分钟学会通勤妆，手残党也能画' },
-  story: { label: '故事叙事', desc: '场景 + 情绪 + 转折', color: '#8b5cf6', icon: '📖',
-    formula: '具体场景 → 情绪冲突 → 转折事件 → 感悟/行动',
-    example: '那天我在地铁上哭了一场，突然想通了' },
-  collection: { label: '合集盘点', desc: '筛选标准 + 多维对比', color: '#f59e0b', icon: '📊',
-    formula: '需求定义 → 筛选标准 → 分项推荐 → 总结对比',
-    example: '学生党必入的10件平价好物合集' },
-  opinion: { label: '观点评论', desc: '态度 + 洞察 + 争议', color: '#f97316', icon: '💡',
-    formula: '现象引入 → 核心观点 → 论据论证 → 引发讨论',
-    example: '为什么我不建议年轻人裸辞？说点难听的' },
-  emotional: { label: '情感共鸣', desc: '共情 + 陪伴 + 治愈', color: '#14b8a6', icon: '🫶',
-    formula: '情绪场景 → 共情表达 → 温柔陪伴 → 正向收尾',
-    example: '如果你最近很累，进来坐一会儿' },
-  avoid: { label: '避雷拔草', desc: '踩坑经历 + 真相揭露', color: '#ef4444', icon: '⚠️',
-    formula: '期待 vs 现实 → 问题罗列 → 替代方案 → 省钱建议',
-    example: '这5个智商税千万别买！用过的人都说后悔' },
-  vlog: { label: 'Vlog叙事', desc: '时间线 + 现场感', color: '#10b981', icon: '🎬',
-    formula: '开始状态 → 转折事件 → 解决方案 → 结果 + 感受',
-    example: '30岁裸辞后的第100天，我怎么样了' },
+// 默认账号风格卡（Jennie：疗愈/玄学/占星内容方向）
+const DEFAULT_STYLE_CARD = {
+  track: '疗愈/玄学/占星',
+  style: '故事叙事 + 情感共鸣',
+  audience: '年轻女性 / 30+ 疗愈探索者 / 玄学兴趣人群',
+  platform: '小红书 / 抖音 / 公众号',
+  tone: '温柔治愈、共情陪伴、像懂行的朋友在分享',
+  range: '300-800字',
 };
 
 export default function RewriteWorkshop({ initialContentId, initialBrief, onNavigate }) {
   const [contents, setContents] = useState([]);
   const [hotwords, setHotwords] = useState([]);
-  const [hotwordOffset, setHotwordOffset] = useState({}); // 每个分类的换一批偏移
   const [selectedContent, setSelectedContent] = useState(initialContentId || null);
   const [freeBrief, setFreeBrief] = useState(initialBrief || '');
   const [selectedHotwords, setSelectedHotwords] = useState([]);
   const [customHotwordInput, setCustomHotwordInput] = useState('');
   const [collapsedCategories, setCollapsedCategories] = useState({});
-  const [style, setStyle] = useState('review');
   const [count, setCount] = useState(3);
   const [generating, setGenerating] = useState(false);
   const [results, setResults] = useState([]);
@@ -62,12 +42,7 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
       // 用自己素材热词 + 爆款默认热词库补齐，确保每个分类都充足
       const merged = mergeWithDefaultHotwords(classified, 30);
       setHotwords(merged);
-      setHotwordOffset({}); // 重置偏移
     }).catch(console.error);
-  };
-
-  const shuffleCategory = (cat) => {
-    setHotwordOffset(prev => ({ ...prev, [cat]: (prev[cat] || 0) + 1 }));
   };
 
   useEffect(() => {
@@ -199,7 +174,7 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
         brief: hasFreeBrief ? freeBrief : '',
         source_text: hasText ? pastedText.trim() : '',
         hotwords: selectedHotwords,
-        style,
+        style: 'trend_catcher', // 标记使用爆款复刻技能
         count,
       });
       setResults(data.items || data);
@@ -406,34 +381,40 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
             </div>
 
             {/* 笔记类型 */}
+            {/* 爆款复刻模式开关 + 账号风格卡 */}
             <div style={panelStyle}>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#7c3aed', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600 }}>2</span>
-                选择笔记类型
+                爆款复刻模式（已开启）
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {Object.entries(NOTE_TYPES).map(([k, s]) => (
-                  <button key={k} onClick={() => setStyle(k)} style={{
-                    padding: '12px 14px', borderRadius: 10, textAlign: 'left',
-                    border: style === k ? '2px solid ' + s.color : '1px solid #dee2e6',
-                    backgroundColor: style === k ? s.color + '10' : '#fff',
-                    cursor: 'pointer',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                      <span style={{ fontSize: 20 }}>{s.icon}</span>
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 14, color: style === k ? s.color : '#212529' }}>{s.label}</div>
-                        <div style={{ fontSize: 12, color: '#868e96' }}>{s.desc}</div>
-                      </div>
-                    </div>
-                    {style === k && (
-                      <div style={{ marginTop: 8, padding: '8px 12px', borderRadius: 6, backgroundColor: '#f8f9fa', fontSize: 12, color: '#495057' }}>
-                        <div style={{ fontWeight: 600, marginBottom: 2 }}>爆款公式：{s.formula}</div>
-                        <div style={{ color: '#868e96', fontStyle: 'italic' }}>示例：{s.example}</div>
-                      </div>
-                    )}
-                  </button>
-                ))}
+              <div style={{
+                padding: 14, borderRadius: 10,
+                background: 'linear-gradient(135deg,#fef3c7 0%,#ede9fe 100%)',
+                border: '1px solid #d8b4fe', marginBottom: 12,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 18 }}>🎯</span>
+                  <span style={{ fontWeight: 600, fontSize: 13, color: '#7c3aed' }}>已嵌入「爆款复刻创作」技能</span>
+                </div>
+                <div style={{ fontSize: 12, color: '#5b21b6', lineHeight: 1.6 }}>
+                  AI 将按 6 步流程产出：账号风格定位 → 拆解爆款 → 生成专属创作提示词 → 复刻改写 → 合规审核报告
+                </div>
+              </div>
+
+              {/* 账号风格卡 */}
+              <div style={{ padding: 12, backgroundColor: '#f8f9fa', borderRadius: 8, fontSize: 12, color: '#495057' }}>
+                <div style={{ fontWeight: 600, marginBottom: 8, color: '#212529', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  📋 账号风格卡
+                  <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, backgroundColor: '#10b981', color: '#fff', fontWeight: 500 }}>已默认</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px' }}>
+                  <div><span style={{ color: '#868e96' }}>垂直赛道：</span>{DEFAULT_STYLE_CARD.track}</div>
+                  <div><span style={{ color: '#868e96' }}>细分风格：</span>{DEFAULT_STYLE_CARD.style}</div>
+                  <div><span style={{ color: '#868e96' }}>目标受众：</span>{DEFAULT_STYLE_CARD.audience}</div>
+                  <div><span style={{ color: '#868e96' }}>发文平台：</span>{DEFAULT_STYLE_CARD.platform}</div>
+                  <div style={{ gridColumn: '1 / -1' }}><span style={{ color: '#868e96' }}>语气调性：</span>{DEFAULT_STYLE_CARD.tone}</div>
+                  <div style={{ gridColumn: '1 / -1' }}><span style={{ color: '#868e96' }}>字数范围：</span>{DEFAULT_STYLE_CARD.range}</div>
+                </div>
               </div>
             </div>
 
@@ -504,19 +485,9 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
                 }
                 const PER_CAT = 10;
                 return (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto', paddingRight: 4 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 380, overflowY: 'auto', paddingRight: 4 }}>
                     {sortedCategories.map(cat => {
                       const all = grouped[cat].sort((a, b) => (b.count || 0) - (a.count || 0));
-                      const offset = hotwordOffset[cat] || 0;
-                      const sliceStart = (offset * PER_CAT) % Math.max(all.length, 1);
-                      let slice = [];
-                      if (all.length <= PER_CAT) {
-                        slice = all;
-                      } else {
-                        for (let i = 0; i < PER_CAT; i++) {
-                          slice.push(all[(sliceStart + i) % all.length]);
-                        }
-                      }
                       const collapsed = collapsedCategories[cat];
                       return (
                         <div key={cat} style={{
@@ -532,33 +503,46 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
                             }}
                           >
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ fontSize: 12, fontWeight: 600, color: CATEGORY_COLORS[cat] || '#475569' }}>🏷 {cat}</span>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: CATEGORY_COLORS[cat] || '#475569' }}>🏷 {cat}</span>
                               <span style={{ fontSize: 11, color: '#868e96' }}>(共 {grouped[cat].length} 个)</span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              {all.length > PER_CAT && !collapsed && (
-                                <button onClick={(e) => { e.stopPropagation(); shuffleCategory(cat); }} style={{
-                                  padding: '2px 8px', borderRadius: 10, border: '1px solid #e9ecef',
-                                  background: '#fff', color: '#868e96', fontSize: 11, cursor: 'pointer',
-                                }}>🔄 换一批</button>
-                              )}
-                              <span style={{ fontSize: 12, color: '#868e96' }}>{collapsed ? '▶' : '▼'}</span>
+                              <span style={{ fontSize: 14, color: '#7c3aed' }}>{collapsed ? '▶' : '▼'}</span>
                             </div>
                           </div>
                           {!collapsed && (
                             <div style={{ padding: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                              {slice.map(hw => (
-                                <button key={hw.id || hw.word} onClick={() => toggleHotword(hw.word)} style={{
-                                  padding: '4px 10px', borderRadius: 20,
-                                  border: '1px solid ' + (selectedHotwords.includes(hw.word) ? CATEGORY_COLORS[cat] || '#7c3aed' : '#dee2e6'),
-                                  fontSize: 12,
-                                  backgroundColor: selectedHotwords.includes(hw.word) ? (CATEGORY_COLORS[cat] || '#7c3aed') : '#fff',
-                                  color: selectedHotwords.includes(hw.word) ? '#fff' : '#495057',
-                                  cursor: 'pointer',
-                                }} title={(hw.isDefault ? '系统默认热词 · ' : hw.isCustom ? '自定义热词 · ' : '素材热词 · ') + '频次: ' + (hw.count || hw.frequency || 0)}>
-                                  {hw.word}
-                                </button>
-                              ))}
+                              {all.map(hw => {
+                                const isSelected = selectedHotwords.includes(hw.word);
+                                return (
+                                  <span key={hw.id || hw.word} style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                                    padding: '4px 4px 4px 10px', borderRadius: 20,
+                                    border: '1px solid ' + (isSelected ? CATEGORY_COLORS[cat] || '#7c3aed' : '#dee2e6'),
+                                    fontSize: 12,
+                                    backgroundColor: isSelected ? (CATEGORY_COLORS[cat] || '#7c3aed') : '#fff',
+                                    color: isSelected ? '#fff' : '#495057',
+                                    cursor: 'pointer',
+                                  }} title={(hw.isDefault ? '系统默认热词 · ' : hw.isCustom ? '自定义热词 · ' : '素材热词 · ') + '频次: ' + (hw.count || hw.frequency || 0)}>
+                                    <span onClick={() => toggleHotword(hw.word)} style={{ flex: 1 }}>{hw.word}</span>
+                                    <button onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (window.confirm('确认从热词库删除「' + hw.word + '」？')) {
+                                        hotwordAPI.deleteWord(hw.word).then(() => {
+                                          setHotwords(prev => prev.filter(h => h.word !== hw.word));
+                                          setSelectedHotwords(prev => prev.filter(w => w !== hw.word));
+                                        }).catch(err => alert('删除失败: ' + err.message));
+                                      }
+                                    }} style={{
+                                      width: 18, height: 18, borderRadius: 9, border: 'none',
+                                      background: isSelected ? 'rgba(255,255,255,0.3)' : '#f1f3f5',
+                                      color: isSelected ? '#fff' : '#868e96',
+                                      fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                      marginLeft: 2,
+                                    }} title="从热词库删除">×</button>
+                                  </span>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
