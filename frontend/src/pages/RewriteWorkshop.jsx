@@ -2,16 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { contentAPI, deconstructAPI, rewriteAPI, hotwordAPI, callAIVision } from '../api';
 import { CATEGORY_COLORS, classifyWord, groupHotwordsByCategory, mergeWithDefaultHotwords } from '../utils/hotwordCategories';
 
-// 默认账号风格卡（Jennie：疗愈/玄学/占星内容方向）
-const DEFAULT_STYLE_CARD = {
-  track: '疗愈/玄学/占星',
-  style: '故事叙事 + 情感共鸣',
-  audience: '年轻女性 / 30+ 疗愈探索者 / 玄学兴趣人群',
-  platform: '小红书 / 抖音 / 公众号',
-  tone: '温柔治愈、共情陪伴、像懂行的朋友在分享',
-  range: '300-800字',
-};
-
 export default function RewriteWorkshop({ initialContentId, initialBrief, onNavigate }) {
   const [contents, setContents] = useState([]);
   const [hotwords, setHotwords] = useState([]);
@@ -390,7 +380,7 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
               <div style={{
                 padding: 14, borderRadius: 10,
                 background: 'linear-gradient(135deg,#fef3c7 0%,#ede9fe 100%)',
-                border: '1px solid #d8b4fe', marginBottom: 12,
+                border: '1px solid #d8b4fe',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                   <span style={{ fontSize: 18 }}>🎯</span>
@@ -398,22 +388,6 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
                 </div>
                 <div style={{ fontSize: 12, color: '#5b21b6', lineHeight: 1.6 }}>
                   AI 将按 6 步流程产出：账号风格定位 → 拆解爆款 → 生成专属创作提示词 → 复刻改写 → 合规审核报告
-                </div>
-              </div>
-
-              {/* 账号风格卡 */}
-              <div style={{ padding: 12, backgroundColor: '#f8f9fa', borderRadius: 8, fontSize: 12, color: '#495057' }}>
-                <div style={{ fontWeight: 600, marginBottom: 8, color: '#212529', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  📋 账号风格卡
-                  <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, backgroundColor: '#10b981', color: '#fff', fontWeight: 500 }}>已默认</span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px' }}>
-                  <div><span style={{ color: '#868e96' }}>垂直赛道：</span>{DEFAULT_STYLE_CARD.track}</div>
-                  <div><span style={{ color: '#868e96' }}>细分风格：</span>{DEFAULT_STYLE_CARD.style}</div>
-                  <div><span style={{ color: '#868e96' }}>目标受众：</span>{DEFAULT_STYLE_CARD.audience}</div>
-                  <div><span style={{ color: '#868e96' }}>发文平台：</span>{DEFAULT_STYLE_CARD.platform}</div>
-                  <div style={{ gridColumn: '1 / -1' }}><span style={{ color: '#868e96' }}>语气调性：</span>{DEFAULT_STYLE_CARD.tone}</div>
-                  <div style={{ gridColumn: '1 / -1' }}><span style={{ color: '#868e96' }}>字数范围：</span>{DEFAULT_STYLE_CARD.range}</div>
                 </div>
               </div>
             </div>
@@ -485,7 +459,7 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
                 }
                 const PER_CAT = 10;
                 return (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 380, overflowY: 'auto', paddingRight: 4 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 600, overflowY: 'auto', paddingRight: 4 }}>
                     {sortedCategories.map(cat => {
                       const all = grouped[cat].sort((a, b) => (b.count || 0) - (a.count || 0));
                       const collapsed = collapsedCategories[cat];
@@ -511,7 +485,10 @@ export default function RewriteWorkshop({ initialContentId, initialBrief, onNavi
                             </div>
                           </div>
                           {!collapsed && (
-                            <div style={{ padding: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            <div style={{
+                              padding: 10, display: 'flex', flexWrap: 'wrap', gap: 6,
+                              maxHeight: 280, overflowY: 'auto',
+                            }}>
                               {all.map(hw => {
                                 const isSelected = selectedHotwords.includes(hw.word);
                                 return (
