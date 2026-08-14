@@ -146,6 +146,78 @@ export async function callAI(prompt, systemPrompt) {
   throw new Error('AI 调用失败：直连与本地代理均不可用。请确认「设置」里 API Key 正确，或本机已启动抓取代理。');
 }
 
+// ---------- AI Vision API 调用（图片转文字） ----------
+export async function callAIVision(base64Image, prompt = '请提取图片中的全部文字内容，保持原有段落和换行。只返回文字，不要任何解释。') {
+  const cfg = await configAPI.get();
+  if (!cfg.apiKey || !cfg.apiKey.trim()) {
+    throw new Error('API Key 未配置。请在「设置」页面填写 API Key 并保存。');
+  }
+
+  const url = cfg.apiUrl || 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+  const model = 'glm-4v-flash'; // 智谱免费视觉模型
+  const dataUrl = base64Image.startsWith('data:') ? base64Image : `data:image/png;base64,${base64Image}`;
+
+  let resp = null;
+  try {
+    resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + cfg.apiKey,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'user', content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: dataUrl } },
+          ]},
+        ],
+        temperature: 0.3,
+        max_tokens: 2000,
+      }),
+    });
+  } catch (e) {
+    resp = null;
+  }
+
+  if (resp) {
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => '');
+      let msg = errText;
+      try { const j = JSON.parse(errText); msg = j.error?.message || j.error?.code || msg; } catch (e) {}
+      throw new Error('AI 视觉识别失败：' + String(msg).slice(0, 200) + '（状态码 ' + resp.status + '）');
+    }
+    const data = await resp.json();
+    if (data.choices?.[0]?.message?.content) return data.choices[0].message.content;
+    throw new Error('AI 视觉返回格式异常：' + JSON.stringify(data).slice(0, 300));
+  }
+
+  // 兜底：本机代理
+  const proxyUrls = ['https://localhost:3443/ai', 'http://localhost:3457/ai'];
+  for (const proxyUrl of proxyUrls) {
+    try {
+      const proxyResp = await fetch(proxyUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt,
+          imageBase64: dataUrl,
+          apiKey: cfg.apiKey,
+          apiUrl: cfg.apiUrl,
+          model,
+        }),
+      });
+      if (proxyResp.ok) {
+        const proxyData = await proxyResp.json();
+        if (proxyData.ok) return proxyData.content;
+      }
+    } catch (e) {}
+  }
+
+  throw new Error('AI 视觉识别失败：直连与本地代理均不可用。');
+}
+
 // ============ Content API ============
 export const contentAPI = {
   async list(params = {}) {
@@ -653,20 +725,22 @@ export const rewriteAPI = {
   },
 
   async run(data) {
-    const { content_id, brief, style = 'default', hotwords = '', count = 3 } = data;
+    const { content_id, brief, source_text, style = 'default', hotwords = '', count = 3 } = data;
     const n = Math.min(Math.max(parseInt(count) || 3, 1), 5);
 
     const styleMap = {
       review: '种草测评型：「亲身体验+真实对比」，结构=痛点共鸣→产品引入→分维度对比→推荐结论。像买回家用了两周在群里跟闺蜜分享的感觉',
       tutorial: '干货教程型：「步骤清晰+可复制」，结构=问题场景→解决方法→分步操作→效果展示。像给朋友发微信教她做一件事，每一步都具体可执行',
-      vlog: 'Vlog叙事型：「故事线+情绪起伏」，结构=开始状态→转折事件→解决方案→结果+感受。像写日记一样有具体时间地点细节',
+      story: '故事叙事型：「场景+情绪+转折」，结构=具体场景→情绪冲突→转折事件→感悟/行动。像讲一件真实发生在你身边的事',
       collection: '合集盘点型：「筛选标准+多维对比」，结构=需求定义→筛选标准→分项推荐→总结对比。每个推荐项有具体来源和使用感受',
+      opinion: '观点评论型：「态度+洞察+争议」，结构=现象引入→核心观点→论据论证→引发讨论。有立场但不说教，像朋友间认真聊天',
+      emotional: '情感共鸣型：「共情+陪伴+治愈」，结构=情绪场景→共情表达→温柔陪伴→正向收尾。像在深夜陪人说话，允许句子长短不齐',
       avoid: '避雷拔草型：「踩坑经历+真相揭露」，结构=期待vs现实→问题罗列→替代方案→省钱建议。吐槽真实不夸张，建议真诚',
+      vlog: 'Vlog叙事型：「时间线+现场感」，结构=开始状态→转折事件→解决方案→结果+感受。像写日记一样有具体时间地点细节',
       default: '自然真人感：像朋友聊天一样，有语气词、有停顿、有真实的小犹豫，不要完美排比',
       healing: '治愈系：温柔、共情、像在深夜陪人说话，允许句子长短不齐，带一点呼吸感',
       sharp: '犀利系：观点直接、有态度、敢下判断，像闺蜜吐槽或过来人拍醒你',
       dry: '干货系：结构清晰但不像说明书，加入"我踩过的坑""说人话就是"等口语表达',
-      story: '故事系：有画面、有细节、有具体场景，像讲一件刚发生的事',
     };
 
     const hotwordText = Array.isArray(hotwords) ? hotwords.join('、') : (hotwords || '');
@@ -747,6 +821,20 @@ export const rewriteAPI = {
         '2. 每条内容角度要有差异（不同人群/不同场景/不同情绪点/不同争议点）\n' +
         '3. 内容要有疗愈/玄学/占星的专业感但不端着，像懂行的朋友在分享\n' +
         '4. 可结合当下天象（水逆、满月、新月、行星换座等）增加时效性和共鸣\n\n' +
+        writingRules;
+    } else if (source_text && source_text.trim()) {
+      // ---------- 粘贴文案/图片识别后的仿写模式 ----------
+      saveContentId = null;
+      prompt =
+        '你是一个真人博主，正在写一条要发在小红书/抖音的内容。下面是我从别处看到的一段【参考文案】，请学习它的风格、结构和语气，生成 ' + n + ' 条**同领域、不同角度**的二次创作。\n' +
+        '【风格要求】' + (styleMap[style] || styleMap.default) + hotwordInject + '\n\n' +
+        '【参考文案（不要照抄，但要保留核心场景和人物设定）】\n' + source_text.trim().slice(0, 2000) + '\n\n' +
+        '【核心要求 - 严格遵守】\n' +
+        '1. 【同领域】主题必须和参考文案一致，原文讲什么就讲什么 — 讲美妆就讲美妆，讲穿搭就讲穿搭，讲情感就讲情感。**严禁换领域**\n' +
+        '2. 【同受众】目标人群保持一致（小白/新手/学生/上班族等定位不变）\n' +
+        '3. 【复用结构】学习参考文案的标题节奏、开篇钩子、情绪推进和结尾方式，不要换结构\n' +
+        '4. 【不同角度】可以换的是：具体场景、人设、切入点、产品类型、情绪细节、出场顺序\n' +
+        '5. 参考文案讲的具体细节（品牌、地址、价格、地点、人物）可以替换，但【行业/品类/痛点】必须保留\n\n' +
         writingRules;
     } else {
       throw new Error('请先选择模板，或在灵感首页用「去仿写」带入选题方向');
